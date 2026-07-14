@@ -70,9 +70,9 @@ test('ciclo completo: pedir info → responder → firmar', async () => {
   assert.equal(r.status, 200)
   assert.equal((await r.json()).request.status, 'info_requested')
 
-  // otro líder (no el solicitante) NO puede responder
+  // otro líder ni siquiera ve la solicitud → 404 (no revela su existencia)
   r = await requestAction(req('POST', '/api/request-action', other, { id, action: 'provide_info', note: 'x' }))
-  assert.equal(r.status, 403)
+  assert.equal(r.status, 404)
 
   // el solicitante responde → vuelve a revisión
   r = await requestAction(req('POST', '/api/request-action', leader, { id, action: 'provide_info', note: 'CAC 42' }))
@@ -103,4 +103,37 @@ test('GET por id devuelve la solicitud; id inexistente = 404', async () => {
   assert.equal(r.status, 200)
   r = await requests(req('GET', '/api/requests?id=noexiste', ceo))
   assert.equal(r.status, 404)
+})
+
+test('privacidad: un líder NO ve las solicitudes de otro', async () => {
+  const created = (await (await requests(req('POST', '/api/requests', leader, {
+    type: 'approve', title: 'Privado de Ana', context: 'c', recommendation: 'r', impact: 'i',
+  }))).json()).request
+
+  // Otro líder: no aparece en la lista y por id da 404 (no revela existencia)
+  const list = (await (await requests(req('GET', '/api/requests', other))).json()).requests
+  assert.ok(!list.some((r) => r.id === created.id), 'carlos no debe ver la de ana')
+  assert.equal((await requests(req('GET', '/api/requests?id=' + created.id, other))).status, 404)
+  // Tampoco puede actuar sobre ella (404: ni siquiera la ve)
+  assert.equal((await requestAction(req('POST', '/api/request-action', other, { id: created.id, action: 'approve' }))).status, 404)
+
+  // La solicitante sí la ve; el CEO también
+  assert.ok((await (await requests(req('GET', '/api/requests', leader))).json()).requests.some((r) => r.id === created.id))
+  assert.ok((await (await requests(req('GET', '/api/requests', ceo))).json()).requests.some((r) => r.id === created.id))
+})
+
+test('delegación: un supervisor ve el grupo asignado pero no puede decidir', async () => {
+  process.env.VIEWER_DELEGATIONS = JSON.stringify({ 'angela@iwin.im': ['ana@iwin.im'] })
+  const angela = signToken({ u: 'angela@iwin.im', name: 'Ángela', role: 'leader' })
+  const created = (await (await requests(req('POST', '/api/requests', leader, {
+    type: 'sign', title: 'Para supervisar', context: 'c', recommendation: 'r', impact: 'i',
+  }))).json()).request
+
+  // Ángela ve la de Ana (delegada); Carlos (sin delegación) no
+  assert.ok((await (await requests(req('GET', '/api/requests', angela))).json()).requests.some((r) => r.id === created.id))
+  assert.ok(!(await (await requests(req('GET', '/api/requests', other))).json()).requests.some((r) => r.id === created.id))
+  // Ángela puede verla por id, pero no decidir (no es CEO ni solicitante)
+  assert.equal((await requests(req('GET', '/api/requests?id=' + created.id, angela))).status, 200)
+  assert.equal((await requestAction(req('POST', '/api/request-action', angela, { id: created.id, action: 'sign' }))).status, 403)
+  delete process.env.VIEWER_DELEGATIONS
 })

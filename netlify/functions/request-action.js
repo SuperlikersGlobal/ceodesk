@@ -6,7 +6,7 @@
 import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
 import { applyAction, isOpen, isValidAction, CEO_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
-import { isCeo } from './_lib/users.js'
+import { isCeo, canViewRequest } from './_lib/users.js'
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
@@ -19,7 +19,8 @@ export default async (req) => {
   if (!id || !isValidAction(action)) return json({ error: 'Solicitud o acción no válida' }, 400)
 
   const request = await getRequest(id)
-  if (!request) return json({ error: 'Solicitud no encontrada' }, 404)
+  // 404 si no existe o el usuario no puede siquiera verla (no filtra existencia).
+  if (!request || !canViewRequest(u, request)) return json({ error: 'Solicitud no encontrada' }, 404)
 
   const ceo = isCeo(u)
   const requester = String(request.requesterId).toLowerCase() === String(u.u).toLowerCase()

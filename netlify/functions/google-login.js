@@ -1,7 +1,7 @@
 // Intercambia el credential de Google Sign-In por un token de sesión de CeoDesk.
 import { signToken, json } from './_lib/auth.js'
 import { verifyGoogleCredential } from './_lib/google.js'
-import { getOrCreateUserByEmail } from './_lib/users.js'
+import { getOrCreateUserByEmail, canSupervise } from './_lib/users.js'
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
@@ -13,6 +13,7 @@ export default async (req) => {
   catch (e) { return json({ error: e.message }, 401) }
 
   const user = await getOrCreateUserByEmail(g.email, g.name)
-  const token = signToken({ u: user.email, name: user.name, role: user.role, title: user.title })
-  return json({ token, user })
+  const sup = canSupervise({ u: user.email, role: user.role })
+  const token = signToken({ u: user.email, name: user.name, role: user.role, title: user.title, sup })
+  return json({ token, user: { ...user, sup } })
 }

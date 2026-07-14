@@ -4,6 +4,7 @@
 import { authUser, json } from './_lib/auth.js'
 import { listRequests, getRequest, saveRequest, nextCode } from './_lib/store.js'
 import { buildRequest, REQUEST_TYPES, PRIORITIES } from './_lib/lifecycle.js'
+import { canViewRequest } from './_lib/users.js'
 
 export default async (req) => {
   const u = authUser(req)
@@ -13,10 +14,14 @@ export default async (req) => {
     const id = new URL(req.url).searchParams.get('id')
     if (id) {
       const r = await getRequest(id)
-      if (!r) return json({ error: 'Solicitud no encontrada' }, 404)
+      // 404 (no 403) para no revelar la existencia de solicitudes ajenas.
+      if (!r || !canViewRequest(u, r)) return json({ error: 'Solicitud no encontrada' }, 404)
       return json({ request: r })
     }
-    return json({ requests: await listRequests() })
+    // Cada quien ve solo lo que puede: el CEO todo, el líder lo suyo,
+    // los delegados además lo de su grupo.
+    const all = await listRequests()
+    return json({ requests: all.filter((r) => canViewRequest(u, r)) })
   }
 
   if (req.method === 'POST') {

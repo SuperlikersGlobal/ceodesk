@@ -15,6 +15,40 @@ export function isCeo(user) {
   return !!user && (user.role === 'ceo' || ceoEmails().includes(String(user.u || user.email).toLowerCase()))
 }
 
+// Delegaciones de visibilidad: qué solicitudes de OTROS puede ver un usuario.
+// VIEWER_DELEGATIONS = JSON { "correo_del_delegado": ["correo1","correo2", ...] }
+// Ej: {"angela@iwin.im":["magali@iwin.im","santiago@iwin.im"]}
+export function viewerDelegations() {
+  try { return JSON.parse(process.env.VIEWER_DELEGATIONS || '{}') } catch { return {} }
+}
+
+export function delegatedRequestersFor(email) {
+  const map = viewerDelegations()
+  const key = Object.keys(map).find((k) => k.toLowerCase() === String(email || '').toLowerCase())
+  const list = key ? map[key] : []
+  return (Array.isArray(list) ? list : []).map((e) => String(e).toLowerCase())
+}
+
+// ¿Puede este usuario VER esta solicitud?
+//   - CEO: todo.
+//   - Solicitante: la suya.
+//   - Delegado: las de las personas que tiene asignadas.
+export function canViewRequest(user, request) {
+  if (isCeo(user)) return true
+  const me = String((user && (user.u || user.email)) || '').toLowerCase()
+  if (!me) return false
+  const owner = String((request && request.requesterId) || '').toLowerCase()
+  if (owner === me) return true
+  return delegatedRequestersFor(me).includes(owner)
+}
+
+// ¿El usuario puede supervisar (ver solicitudes de otros)? CEO o delegado.
+export function canSupervise(user) {
+  if (isCeo(user)) return true
+  const me = String((user && (user.u || user.email)) || '').toLowerCase()
+  return delegatedRequestersFor(me).length > 0
+}
+
 function titleFor(email, fallbackRole) {
   let map = {}
   try { map = JSON.parse(process.env.USER_TITLES || '{}') } catch { map = {} }
