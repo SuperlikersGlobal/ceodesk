@@ -1,14 +1,8 @@
 node_modules
-dist
-dist-ssr
-*.local
+.netlify
 .env
 .env.*
 !.env.example
 .DS_Store
-.vscode/*
-!.vscode/extensions.json
 npm-debug.log*
-
-# TypeScript build info
-tsconfig.tsbuildinfo
+dist

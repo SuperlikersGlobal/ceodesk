@@ -1,0 +1,55 @@
+// GET  /api/requests        -> lista todas las solicitudes (con eventos)
+// GET  /api/requests?id=..   -> una solicitud
+// POST /api/requests         -> crea una solicitud (cualquier usuario autenticado)
+import { authUser, json } from './_lib/auth.js'
+import { listRequests, getRequest, saveRequest, nextCode } from './_lib/store.js'
+import { buildRequest, REQUEST_TYPES, PRIORITIES } from './_lib/lifecycle.js'
+
+export default async (req) => {
+  const u = authUser(req)
+  if (!u) return json({ error: 'No autorizado' }, 401)
+
+  if (req.method === 'GET') {
+    const id = new URL(req.url).searchParams.get('id')
+    if (id) {
+      const r = await getRequest(id)
+      if (!r) return json({ error: 'Solicitud no encontrada' }, 404)
+      return json({ request: r })
+    }
+    return json({ requests: await listRequests() })
+  }
+
+  if (req.method === 'POST') {
+    let body
+    try { body = await req.json() } catch { return json({ error: 'JSON inválido' }, 400) }
+
+    const errors = []
+    if (!body.title || !body.title.trim()) errors.push('el título')
+    if (!REQUEST_TYPES.includes(body.type)) errors.push('el tipo')
+    if (!body.context || !body.context.trim()) errors.push('el contexto')
+    if (!body.recommendation || !body.recommendation.trim()) errors.push('la recomendación')
+    if (!body.impact || !body.impact.trim()) errors.push('el impacto')
+    if (errors.length) {
+      return json({ error: 'Faltan campos obligatorios: ' + errors.join(', ') + '.' }, 400)
+    }
+
+    const input = {
+      title: body.title.trim(),
+      type: body.type,
+      priority: PRIORITIES.includes(body.priority) ? body.priority : 'medium',
+      context: body.context.trim(),
+      recommendation: body.recommendation.trim(),
+      impact: body.impact.trim(),
+      documentName: (body.documentName || '').trim() || null,
+      documentUrl: (body.documentUrl || '').trim() || null,
+      documentVersion: (body.documentVersion || '').trim() || null,
+      dueDate: body.dueDate || null,
+    }
+    const requester = { email: u.u, name: u.name, title: u.title }
+    const request = buildRequest(input, await nextCode(), requester)
+    await saveRequest(request)
+    return json({ request }, 201)
+  }
+
+  return json({ error: 'Método no permitido' }, 405)
+}
