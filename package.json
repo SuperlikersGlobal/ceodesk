@@ -5,15 +5,12 @@
   "type": "module",
   "description": "CeoDesk — bandeja única de decisiones, aprobaciones y firmas del CEO (Netlify Functions + Blobs + Google auth)",
   "scripts": {
-    "dev": "netlify dev",
-    "deploy": "netlify deploy --prod",
+    "dev": "npx -y netlify-cli dev",
+    "deploy": "npx -y netlify-cli deploy --prod",
     "test": "node --test"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
     "google-auth-library": "^9.14.1"
-  },
-  "devDependencies": {
-    "netlify-cli": "^17.36.0"
   }
 }
