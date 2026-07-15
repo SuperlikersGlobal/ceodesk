@@ -103,6 +103,18 @@
   .row .rmeta{color:var(--muted);font-size:12.5px;margin-top:3px;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
   .row .rside{display:flex;align-items:center;gap:9px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
 
+  .gt-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px}
+  .gt-add input{flex:1;min-width:180px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 12px;font-size:13.5px}
+  .gt-add select{border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 10px;font-size:12.5px;font-weight:600}
+  .gt-card{display:flex;align-items:flex-start;gap:13px;padding:13px 15px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+  .gt-card.done{opacity:.62}
+  .gt-card .gt-main{min-width:0;flex:1}
+  .gt-card .gt-title{font-weight:650;font-size:14.5px}
+  .gt-card.done .gt-title{text-decoration:line-through}
+  .gt-card .gt-desc{color:var(--muted);font-size:13px;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .gt-card .gt-meta{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .gt-card .gt-act{display:flex;gap:7px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+  .gt-card .gt-act .btn{padding:7px 12px;font-size:12.5px}
   .badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
   .badge.bdot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
   .b-green{background:var(--green-soft);color:var(--green)} .b-red{background:var(--red-soft);color:var(--red)}
@@ -212,7 +224,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -253,9 +265,9 @@
     }).catch(function(){ showLogin('No se pudo cargar la configuración.'); });
   }
   function loadAndStart(){
-    Promise.all([loadRequests(), loadRoster()]).then(function(){
-      // deriva el usuario desde el token (payload firmado)
-      state.user = decodeUser(state.token);
+    // deriva el usuario desde el token (payload firmado) antes de cargar
+    state.user = decodeUser(state.token);
+    Promise.all([loadRequests(), loadRoster(), loadGtasks()]).then(function(){
       state.loaded = true;
       if(!location.hash) location.hash = '#/bandeja';
       render();
@@ -272,6 +284,12 @@
   }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
   function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
+  // Google Tasks (hub compartido): solo el CEO tiene tareas propias en el hub.
+  function loadGtasks(){
+    if(!state.user || state.user.role!=='ceo'){ state.gtasks=[]; state.gtasksEnabled=false; return Promise.resolve(); }
+    return api('/google-tasks').then(function(d){ state.gtasksEnabled=!!d.enabled; state.gtasks=d.tasks||[]; })
+      .catch(function(){ state.gtasks=[]; state.gtasksEnabled=false; });
+  }
 
   function showLogin(msg){
     root.innerHTML =
@@ -379,6 +397,48 @@
   }
   function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
 
+  // ---- Google Tasks (hub compartido con LADCC) ----
+  var GT_STATUS = { todo:['Por hacer','b-slate'], doing:['En curso','b-blue'], blocked:['Bloqueada','b-amber'], done:['Hecha','b-green'] };
+  var GT_META_LBL = { cat:'Categoría', imp:'Importancia', urg:'Urgencia' };
+  function gtCard(t){
+    var st = GT_STATUS[t.status] || GT_STATUS.todo;
+    var meta='';
+    meta += '<span class="badge b-brand">'+esc(t.listName)+'</span>';
+    if(t.meta){ ['cat','imp','urg'].forEach(function(k){ if(t.meta[k]) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(GT_META_LBL[k])+': '+esc(t.meta[k])+'</span>'; }); }
+    if(t.fingerprint) meta += '<span class="chip" style="padding:3px 10px;font-size:11.5px" title="Sincronizada con LADCC">🔗 '+esc(t.fingerprint)+'</span>';
+    var due = t.due?'<span class="due '+dueInfo(t.due).tone+'">'+esc(dueInfo(t.due).label)+'</span>':'';
+    var acts='';
+    if(t.status!=='done'){
+      if(t.status==='todo') acts+='<button class="btn" onclick="CeoDesk.gtAct(\'start\',\''+t.gid+'\',\''+t.listId+'\')">Empezar</button>';
+      if(t.status==='doing') acts+='<button class="btn" onclick="CeoDesk.gtAct(\'block\',\''+t.gid+'\',\''+t.listId+'\')">Bloquear</button>';
+      if(t.status==='blocked') acts+='<button class="btn" onclick="CeoDesk.gtAct(\'resume\',\''+t.gid+'\',\''+t.listId+'\')">Reanudar</button>';
+      acts+='<button class="btn btn--primary" onclick="CeoDesk.gtAct(\'complete\',\''+t.gid+'\',\''+t.listId+'\')">Completar</button>';
+    }
+    return '<div class="gt-card'+(t.status==='done'?' done':'')+'">'+
+      '<div class="gt-main"><div class="gt-title">'+esc(t.title)+'</div>'+
+        (t.description?'<div class="gt-desc">'+esc(t.description)+'</div>':'')+
+        '<div class="gt-meta"><span class="badge '+st[1]+' bdot">'+st[0]+'</span>'+meta+(due?due:'')+'</div></div>'+
+      '<div class="gt-act">'+acts+'</div></div>';
+  }
+  function gtSection(){
+    if(state.user.role!=='ceo' || !state.gtasksEnabled) return '';
+    var lists = ['Superlikers','LADCC','DCDG','LIH','La Isabella','DCC'];
+    var listOpts = lists.map(function(l){return '<option value="'+esc(l)+'">'+esc(l)+'</option>';}).join('');
+    var impOpts = '<option value="">Importancia…</option>'+['Alta','Media','Baja'].map(function(v){return '<option>'+v+'</option>';}).join('');
+    var urgOpts = '<option value="">Urgencia…</option>'+['Hoy','Pronto','Esta semana','Sin prisa'].map(function(v){return '<option>'+v+'</option>';}).join('');
+    var open = state.gtasks.filter(function(t){return t.status!=='done';});
+    var add = '<div class="gt-add">'+
+      '<input id="gt-title" placeholder="Captura rápida: nueva tarea…" onkeydown="if(event.key===\'Enter\')CeoDesk.gtCreate()">'+
+      '<select id="gt-list">'+listOpts+'</select>'+
+      '<select id="gt-imp">'+impOpts+'</select>'+
+      '<select id="gt-urg">'+urgOpts+'</select>'+
+      '<button class="btn btn--primary" onclick="CeoDesk.gtCreate()"'+(state.gtBusy?' disabled':'')+'>＋ Añadir</button></div>';
+    var list = open.length ? '<div class="rows">'+open.map(gtCard).join('')+'</div>'
+      : '<p style="color:var(--muted);font-size:13px">Sin tareas de Google pendientes.</p>';
+    return '<div class="rowlbl" style="margin-top:26px">Google Tasks · '+open.length+
+      ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— tu sistema personal (6 listas), sincronizado con LADCC</span></div>'+add+list;
+  }
+
   function viewInbox(){
     var me = state.user.email;
     var open = state.requests.filter(function(r){return r.assigneeId===me && isOpen(r.status);}).sort(function(a,b){
@@ -398,7 +458,7 @@
     return { title:'Mi trabajo', html:
       '<div class="phead"><h1>Mi trabajo</h1><p>Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
-      '<div class="toolbar">'+chips+'</div>'+list };
+      '<div class="toolbar">'+chips+'</div>'+list+gtSection() };
   }
   function stat(label,val,cls){ return '<div class="stat"><div class="stat__label">'+label+'</div><div class="stat__value '+(cls||'')+'">'+val+'</div></div>'; }
 
@@ -804,6 +864,30 @@
   function toast(msg){ alert(msg); }
 
   // ---------- menu (mobile) ----------
+  // ---- acciones Google Tasks ----
+  function gtCreate(){
+    if(state.gtBusy) return;
+    var ti=document.getElementById('gt-title'); if(!ti) return;
+    var title=(ti.value||'').trim(); if(!title){ ti.focus(); return; }
+    var listName=(document.getElementById('gt-list')||{}).value||'Superlikers';
+    var imp=(document.getElementById('gt-imp')||{}).value||'';
+    var urg=(document.getElementById('gt-urg')||{}).value||'';
+    state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:'create',title:title,listName:listName,imp:imp||null,urg:urg||null}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+  function gtAct(op,gid,listId){
+    if(state.gtBusy) return;
+    if(op==='complete' && !confirm('¿Marcar esta tarea como completada?')) return;
+    state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:op,gid:gid,listId:listId}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+
   function toggleMenu(){ var s=document.getElementById('side'); if(s) s.classList.toggle('open'); }
   function closeMenu(){ var s=document.getElementById('side'); if(s) s.classList.remove('open'); }
 
@@ -814,7 +898,8 @@
     applyView:function(i){ var v=loadViews()[i]; if(!v) return; state.boardKind=v.kind||'task'; state.boardScope=v.scope||''; state.boardArea=v.area||''; state.boardLabel=v.label||''; render(); },
     delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
-    act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu };
+    act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
+    gtCreate:gtCreate, gtAct:gtAct };
 
   window.addEventListener('hashchange', function(){ if(state.user) render(); });
   boot();

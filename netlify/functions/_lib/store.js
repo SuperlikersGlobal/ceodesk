@@ -38,6 +38,33 @@ function store(name) {
 export const requestsStore = () => store('ceodesk-requests') // key = id -> solicitud (con eventos)
 export const usersStore = () => store('ceodesk-users')       // key = email -> usuario
 export const metaStore = () => store('ceodesk-meta')          // contador de códigos, etc.
+// Proyección de Google Tasks: overlay de CeoDesk mapeado por Google-Task-ID.
+// Guarda solo lo que Google Tasks no representa (estado En curso/Bloqueada, área).
+export const gtasksStore = () => store('ceodesk-gtasks')      // key = gid -> { status, area, updatedAt }
+
+// Lee el overlay de una tarea de Google (o null).
+export async function getGtaskOverlay(gid) {
+  return gtasksStore().get(gid, { type: 'json' })
+}
+
+// Guarda/actualiza el overlay de una tarea de Google, mapeado por su gid.
+export async function saveGtaskOverlay(gid, patch) {
+  const s = gtasksStore()
+  const prev = (await s.get(gid, { type: 'json' })) || { gid }
+  const next = { ...prev, ...patch, gid, updatedAt: new Date().toISOString() }
+  await s.setJSON(gid, next)
+  return next
+}
+
+// Todos los overlays (para fusionarlos con la lista de Google Tasks).
+export async function listGtaskOverlays() {
+  const s = gtasksStore()
+  const { blobs } = await s.list()
+  const rows = await Promise.all(blobs.map((b) => s.get(b.key, { type: 'json' })))
+  const map = {}
+  for (const r of rows) if (r && r.gid) map[r.gid] = r
+  return map
+}
 
 // Contador incremental para los códigos legibles (CD-101, CD-102, …).
 export async function nextCode() {
