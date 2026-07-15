@@ -5,5 +5,6 @@ export default async () => {
   return json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     allowedDomain: (process.env.ALLOWED_DOMAIN || 'iwin.im').toLowerCase(),
+    areas: String(process.env.AREAS || '').split(',').map((s) => s.trim()).filter(Boolean),
   })
 }

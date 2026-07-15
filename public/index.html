@@ -150,6 +150,22 @@
   .modal h2{margin:0 0 6px;font-size:17px} .modal .msub{color:var(--muted);margin:0 0 16px;font-size:13.5px}
   .modal__actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 
+  /* Kanban */
+  .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}
+  .kcol{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:10px;transition:background .12s,border-color .12s}
+  .kcol.over{background:var(--brand-soft);border-color:var(--brand)}
+  .kcol__head{font-weight:700;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:2px 4px 10px;display:flex;align-items:center;gap:8px}
+  .kcount{background:var(--slate-soft);color:var(--slate);border-radius:999px;padding:0 8px;font-size:12px;font-weight:800}
+  .kcol__body{display:flex;flex-direction:column;gap:9px;min-height:44px}
+  .kcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px;cursor:pointer;box-shadow:var(--shadow)}
+  .kcard[draggable="true"]{cursor:grab}
+  .kcard[draggable="true"]:active{cursor:grabbing}
+  .kcard__title{font-weight:600;font-size:13.5px;line-height:1.35}
+  .kcard__meta{color:var(--faint);font-size:12px;margin-top:4px}
+  .kcard__foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px}
+  .kempty{color:var(--faint);font-size:12.5px;text-align:center;padding:12px 0}
+  @media (max-width:900px){.kanban{grid-template-columns:1fr 1fr}}
+  @media (max-width:600px){.kanban{grid-template-columns:1fr}}
   .menu-btn{display:none}
   @media (max-width:900px){.split{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.typegrid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
   @media (max-width:720px){
@@ -178,7 +194,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'' };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -284,6 +300,7 @@
 
     var nav = '';
     nav += navItem('#/bandeja','📥','Mi trabajo', inboxOpen, route);
+    nav += navItem('#/tablero','📊','Tablero', 0, route);
     if(state.user.sup){
       var supOpen = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me && isOpen(r.status);}).length;
       nav += navItem('#/supervision','👁','Supervisión', supOpen, route);
@@ -322,6 +339,7 @@
     if(route==='#/nueva') return viewNew();
     if(route==='#/mis') return viewMine();
     if(route==='#/supervision') return viewSupervision();
+    if(route==='#/tablero') return viewBoard();
     if(route==='#/historial') return viewHistory();
     return viewInbox(); // #/bandeja para todos
   }
@@ -406,10 +424,63 @@
       '<div class="toolbar">'+chips+'</div>'+list };
   }
 
+  // ---------- Tablero Kanban (solo tareas) ----------
+  var KCOLS=[['todo','Por hacer'],['doing','En curso'],['blocked','Bloqueada'],['done','Hecha']];
+  function boardCard(r){
+    var mine=r.assigneeId===state.user.email;
+    return '<div class="kcard" draggable="'+(mine?'true':'false')+'" data-id="'+r.id+'"'+
+      (mine?' ondragstart="CeoDesk.dragStart(event,\''+r.id+'\')"':'')+
+      ' onclick="location.hash=\'#/solicitud/'+r.id+'\'" style="border-left:3px solid '+PRIO_COLOR[r.priority]+'">'+
+      '<div class="kcard__title">'+esc(r.title)+'</div>'+
+      '<div class="kcard__meta"><span class="rcode">'+esc(r.code)+'</span>'+(r.area?' · '+esc(r.area):'')+' · '+esc(r.requesterName)+'</div>'+
+      '<div class="kcard__foot">'+avatar(r.assigneeName||'',22)+dueBadge(r.dueDate)+'</div></div>';
+  }
+  function viewBoard(){
+    var me=state.user.email;
+    var scope=state.boardScope||(state.user.sup?'all':'mine');
+    var area=state.boardArea||'';
+    var tasks=state.requests.filter(function(r){return r.type==='task';});
+    if(scope==='mine') tasks=tasks.filter(function(r){return r.assigneeId===me;});
+    if(area) tasks=tasks.filter(function(r){return r.area===area;});
+    var areaOpts='<option value="">Todas las áreas</option>'+((state.config&&state.config.areas)||[]).map(function(a){return '<option'+(a===area?' selected':'')+'>'+esc(a)+'</option>';}).join('');
+    var toolbar='<div class="toolbar">'+
+      '<button class="chip'+(scope==='mine'?' on':'')+'" onclick="CeoDesk.boardScope(\'mine\')">Mías</button>'+
+      (state.user.sup?'<button class="chip'+(scope==='all'?' on':'')+'" onclick="CeoDesk.boardScope(\'all\')">Las que veo</button>':'')+
+      '<select class="sel" style="width:auto;margin-left:auto" onchange="CeoDesk.boardArea(this.value)">'+areaOpts+'</select>'+
+    '</div>';
+    var board='<div class="kanban">'+KCOLS.map(function(c){
+      var items=tasks.filter(function(r){return r.status===c[0];});
+      var cards=items.map(boardCard).join('');
+      return '<div class="kcol" data-status="'+c[0]+'" ondragover="CeoDesk.dragOver(event,this)" ondragleave="CeoDesk.dragLeave(this)" ondrop="CeoDesk.drop(event,\''+c[0]+'\',this)">'+
+        '<div class="kcol__head">'+c[1]+' <span class="kcount">'+items.length+'</span></div>'+
+        '<div class="kcol__body">'+(cards||'<div class="kempty">—</div>')+'</div></div>';
+    }).join('')+'</div>';
+    return { title:'Tablero', html:'<div class="phead"><h1>Tablero</h1><p>Tareas por estado. Arrastra una tarjeta para moverla (solo si es tuya).</p></div>'+toolbar+board };
+  }
+  var DRAG={id:null,from:null};
+  function colAction(from,to){
+    if(from===to) return null;
+    if(to==='doing'){ if(from==='todo') return 'start'; if(from==='blocked') return 'resume'; }
+    if(to==='done'){ if(from==='doing') return 'complete'; }
+    if(to==='blocked'){ if(from==='todo'||from==='doing') return 'block'; }
+    return null;
+  }
+  function dragStart(e,id){ DRAG.id=id; var r=findReq(id); DRAG.from=r?r.status:null; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';} }
+  function dragOver(e,col){ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='move'; if(col) col.classList.add('over'); }
+  function dragLeave(col){ if(col) col.classList.remove('over'); }
+  function drop(e,toStatus,col){ e.preventDefault(); if(col) col.classList.remove('over');
+    var id=DRAG.id, from=DRAG.from; DRAG.id=null; DRAG.from=null;
+    if(!id) return;
+    var action=colAction(from,toStatus);
+    if(!action){ toast('Ese movimiento no está permitido.'); return; }
+    act(id, action);
+  }
+
   function viewNew(){
     var after=function(){ NewForm.mount(); };
     var rosterOpts = '<option value="" disabled selected>Elige a la persona…</option>'+
       state.roster.map(function(p){ return '<option value="'+esc(p.email)+'">'+esc(p.name)+' — '+esc(p.email)+'</option>'; }).join('');
+    var areaOpts = ((state.config&&state.config.areas)||[]).map(function(a){ return '<option>'+esc(a)+'</option>'; }).join('');
     return { title:'Nueva solicitud', after:after, html:
       '<div class="phead"><h1>Nueva solicitud de decisión</h1><p>Pídele a cualquier persona que lea, apruebe, firme o decida. El contexto es obligatorio: así la decisión se toma con el debido proceso.</p></div>'+
       '<form class="card" id="newform" style="padding:24px;max-width:760px" onsubmit="return false">'+
@@ -421,6 +492,7 @@
         '<div class="two"><div class="field"><label for="f-prio">Prioridad</label><select id="f-prio" class="sel">'+
           Object.keys(PRIO).map(function(p){return '<option value="'+p+'"'+(p==='medium'?' selected':'')+'>'+PRIO[p]+'</option>';}).join('')+'</select></div>'+
           '<div class="field"><label for="f-due">Fecha límite</label><input id="f-due" type="date" class="inp"></div></div>'+
+        '<div class="field"><label for="f-area">Área / Proyecto</label><select id="f-area" class="sel"><option value="">— Sin área —</option>'+areaOpts+'</select></div>'+
         '<div class="field"><label for="f-ctx">Descripción / contexto *</label><div class="hint">Explica qué es y da el trasfondo suficiente.</div><textarea id="f-ctx" class="ta"></textarea></div>'+
         '<div id="decision-fields">'+
         '<div class="field"><label for="f-rec">Tu recomendación *</label><div class="hint">No traigas solo el problema — trae tu propuesta.</div><textarea id="f-rec" class="ta"></textarea></div>'+
@@ -503,7 +575,7 @@
           kv('Solicita', avatar(r.requesterName,24)+' '+esc(r.requesterName), true)+
           kv('Para', avatar(r.assigneeName||'',24)+' '+esc(r.assigneeName||''), true)+
           (r.requesterTitle?kv('Cargo',esc(r.requesterTitle)):'')+
-          kv('Tipo',TYPE[r.type])+kv('Creada',fmtDate(r.createdAt))+kv('Fecha límite',dueBadge(r.dueDate))+
+          kv('Tipo',TYPE[r.type])+(r.area?kv('Área',esc(r.area)):'')+kv('Creada',fmtDate(r.createdAt))+kv('Fecha límite',dueBadge(r.dueDate))+
         '</div>'+
         '<div class="card" style="padding:18px;margin-top:16px"><div class="rowlbl" style="margin-top:0">Historial</div><div class="tl">'+tl+'</div></div>'+
       '</div></div>';
@@ -534,6 +606,7 @@
     submit:function(){
       var g=function(id){return document.getElementById(id).value.trim();};
       var body={ type:NewForm.type, title:g('f-title'), assigneeId:document.getElementById('f-to').value, priority:document.getElementById('f-prio').value,
+        area:document.getElementById('f-area').value,
         context:g('f-ctx'), recommendation:g('f-rec'), impact:g('f-imp'),
         documentName:g('f-doc'), documentUrl:g('f-url'), documentVersion:g('f-ver'),
         dueDate: document.getElementById('f-due').value ? new Date(document.getElementById('f-due').value).toISOString() : null };
@@ -613,6 +686,8 @@
 
   // expose
   window.CeoDesk = { logout:logout, setFilter:function(f){state.listFilter=f;render();}, setHist:function(f){state.histFilter=f;render();},
+    boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();},
+    dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu };
 
   window.addEventListener('hashchange', function(){ if(state.user) render(); });
