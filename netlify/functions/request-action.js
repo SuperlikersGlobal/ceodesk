@@ -1,12 +1,12 @@
 // POST /api/request-action  { id, action, note }
 // Aplica una decisión o interacción sobre una solicitud, con control de acceso:
-//   - CEO: approve | reject | sign | request_info
+//   - Destinatario: approve | reject | sign | request_info
 //   - Solicitante: provide_info | cancel
-//   - CEO o solicitante: comment
+//   - Destinatario o solicitante: comment
 import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
-import { applyAction, isOpen, isValidAction, CEO_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
-import { isCeo, canViewRequest } from './_lib/users.js'
+import { applyAction, isOpen, isValidAction, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
+import { canViewRequest, assigneeOf, emailOf } from './_lib/users.js'
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
@@ -22,17 +22,18 @@ export default async (req) => {
   // 404 si no existe o el usuario no puede siquiera verla (no filtra existencia).
   if (!request || !canViewRequest(u, request)) return json({ error: 'Solicitud no encontrada' }, 404)
 
-  const ceo = isCeo(u)
-  const requester = String(request.requesterId).toLowerCase() === String(u.u).toLowerCase()
+  const me = emailOf(u)
+  const isAssignee = assigneeOf(request) === me
+  const isRequester = String(request.requesterId).toLowerCase() === me
 
   // Control de acceso por tipo de acción
-  if (CEO_ACTIONS.includes(action) && !ceo) {
-    return json({ error: 'Solo el CEO puede tomar esta decisión' }, 403)
+  if (ASSIGNEE_ACTIONS.includes(action) && !isAssignee) {
+    return json({ error: 'Solo el destinatario puede tomar esta decisión' }, 403)
   }
-  if (REQUESTER_ACTIONS.includes(action) && !requester) {
+  if (REQUESTER_ACTIONS.includes(action) && !isRequester) {
     return json({ error: 'Solo quien creó la solicitud puede hacer esto' }, 403)
   }
-  if (action === 'comment' && !ceo && !requester) {
+  if (action === 'comment' && !isAssignee && !isRequester) {
     return json({ error: 'No puedes comentar esta solicitud' }, 403)
   }
 

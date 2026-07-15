@@ -28,8 +28,8 @@ const ACTION_EVENT = {
   comment: 'commented',
 }
 
-// Acciones reservadas al CEO
-export const CEO_ACTIONS = ['approve', 'reject', 'sign', 'request_info']
+// Acciones reservadas al destinatario (quien debe leer/aprobar/firmar/decidir)
+export const ASSIGNEE_ACTIONS = ['approve', 'reject', 'sign', 'request_info']
 // Acciones del solicitante
 export const REQUESTER_ACTIONS = ['provide_info', 'cancel']
 // Acciones que registran una decisión final (auditoría / "firma")
@@ -44,7 +44,8 @@ export function isValidAction(action) {
 }
 
 // Crea la solicitud inicial (con evento 'created'). `input` ya viene validado.
-export function buildRequest(input, code, requester, now = new Date().toISOString()) {
+// `assignee` = { email, name } del destinatario que debe leer/aprobar/firmar/decidir.
+export function buildRequest(input, code, requester, assignee, now = new Date().toISOString()) {
   const id = randomUUID()
   return {
     id,
@@ -56,6 +57,8 @@ export function buildRequest(input, code, requester, now = new Date().toISOStrin
     requesterId: requester.email,
     requesterName: requester.name,
     requesterTitle: requester.title || null,
+    assigneeId: assignee.email,
+    assigneeName: assignee.name,
     context: input.context,
     recommendation: input.recommendation,
     impact: input.impact,

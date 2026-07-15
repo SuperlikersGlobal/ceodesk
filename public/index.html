@@ -177,7 +177,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', rejected:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], loaded:false, listFilter:'all', histFilter:'all' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all' };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -216,11 +216,11 @@
     }).catch(function(){ showLogin('No se pudo cargar la configuración.'); });
   }
   function loadAndStart(){
-    loadRequests().then(function(){
+    Promise.all([loadRequests(), loadRoster()]).then(function(){
       // deriva el usuario desde el token (payload firmado)
       state.user = decodeUser(state.token);
       state.loaded = true;
-      if(!location.hash) location.hash = state.user.role==='ceo' ? '#/bandeja' : '#/mis';
+      if(!location.hash) location.hash = '#/bandeja';
       render();
     }).catch(function(e){ showLogin(e.message); });
   }
@@ -234,6 +234,7 @@
     } catch(e){ return {email:'',name:'Usuario',role:'leader',title:'',sup:false}; }
   }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
+  function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
 
   function showLogin(msg){
     root.innerHTML =
@@ -275,15 +276,15 @@
   // ---------- shell + router ----------
   function render(){
     if(!state.user){ showLogin(); return; }
-    var isCeo = state.user.role==='ceo';
-    var openCount = state.requests.filter(function(r){return isOpen(r.status);}).length;
-    var myOpen = state.requests.filter(function(r){return r.requesterId===state.user.email && isOpen(r.status);}).length;
-    var route = location.hash || (isCeo?'#/bandeja':'#/mis');
+    var me = state.user.email;
+    var inboxOpen = state.requests.filter(function(r){return r.assigneeId===me && isOpen(r.status);}).length;
+    var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
+    var route = location.hash || '#/bandeja';
 
     var nav = '';
-    if(isCeo) nav += navItem('#/bandeja','📥','Bandeja', openCount, route);
-    if(!isCeo && state.user.sup){
-      var supOpen = state.requests.filter(function(r){return r.requesterId!==state.user.email && isOpen(r.status);}).length;
+    nav += navItem('#/bandeja','📥','Bandeja', inboxOpen, route);
+    if(state.user.sup){
+      var supOpen = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me && isOpen(r.status);}).length;
       nav += navItem('#/supervision','👁','Supervisión', supOpen, route);
     }
     nav += navItem('#/nueva','➕','Nueva solicitud', 0, route);
@@ -316,14 +317,12 @@
     return '<a class="nav'+on+'" href="'+href+'"><span class="ic">'+ic+'</span> '+label+(count>0?'<span class="count">'+count+'</span>':'')+'</a>';
   }
   function renderRoute(route){
-    var isCeo = state.user.role==='ceo';
     if(route.indexOf('#/solicitud/')===0) return viewDetail(route.slice('#/solicitud/'.length));
     if(route==='#/nueva') return viewNew();
     if(route==='#/mis') return viewMine();
     if(route==='#/supervision') return viewSupervision();
     if(route==='#/historial') return viewHistory();
-    // default
-    return isCeo ? viewInbox() : viewMine();
+    return viewInbox(); // #/bandeja para todos
   }
 
   // ---------- views ----------
@@ -332,14 +331,15 @@
       '<span class="prio" style="background:'+PRIO_COLOR[r.priority]+'"></span>'+
       avatar(r.requesterName)+
       '<span class="rmain"><span class="rtitle"><span class="rcode">'+esc(r.code)+'</span> '+esc(r.title)+'</span>'+
-        '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
+        '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
         (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+'</span></span>'+
       '<span class="rside">'+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
   }
   function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
 
   function viewInbox(){
-    var open = state.requests.filter(function(r){return isOpen(r.status);}).sort(function(a,b){
+    var me = state.user.email;
+    var open = state.requests.filter(function(r){return r.assigneeId===me && isOpen(r.status);}).sort(function(a,b){
       if(a.dueDate&&b.dueDate&&a.dueDate!==b.dueDate) return a.dueDate<b.dueDate?-1:1;
       if(a.dueDate&&!b.dueDate) return -1; if(!a.dueDate&&b.dueDate) return 1;
       return prioRank(a.priority)-prioRank(b.priority);
@@ -355,7 +355,7 @@
       : '<div class="empty"><div class="ic">🎉</div><p>No hay nada pendiente. Bandeja al día.</p></div>';
     return { title:'Bandeja de decisiones', html:
       '<div class="phead"><h1>Bandeja de decisiones</h1><p>Todo lo que espera tu lectura, aprobación, firma o decisión, en un solo lugar.</p></div>'+
-      '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperan info tuya',needInfo)+'</div>'+
+      '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
       '<div class="toolbar">'+chips+'</div>'+list };
   }
   function stat(label,val,cls){ return '<div class="stat"><div class="stat__label">'+label+'</div><div class="stat__value '+(cls||'')+'">'+val+'</div></div>'; }
@@ -363,7 +363,7 @@
   function viewMine(){
     var mine = state.requests.filter(function(r){return r.requesterId===state.user.email;}).sort(function(a,b){return a.createdAt<b.createdAt?1:-1;});
     var open=mine.filter(function(r){return isOpen(r.status);}), closed=mine.filter(function(r){return !isOpen(r.status);});
-    var html='<div class="phead"><h1>Mis solicitudes</h1><p>Lo que le enviaste al CEO y en qué va cada cosa. Sin perseguir por chat.</p></div>';
+    var html='<div class="phead"><h1>Mis solicitudes</h1><p>Lo que enviaste a otras personas y en qué va cada cosa. Sin perseguir por chat.</p></div>';
     if(!mine.length){ html+='<div class="empty"><div class="ic">📭</div><p>Aún no has creado solicitudes. <a class="link" href="#/nueva">Crea la primera</a>.</p></div>'; return {title:'Mis solicitudes',html:html}; }
     html+='<div class="rowlbl">En curso · '+open.length+'</div>';
     html+= open.length?'<div class="rows" style="margin-bottom:24px">'+open.map(requestRow).join('')+'</div>':'<p style="color:var(--muted);margin-bottom:24px">Nada en curso.</p>';
@@ -374,7 +374,8 @@
   // Vista de supervisión (solo lectura): solicitudes de las personas asignadas
   // al delegado. No incluye las propias (esas van en "Mis solicitudes").
   function viewSupervision(){
-    var others = state.requests.filter(function(r){return r.requesterId!==state.user.email;})
+    var me = state.user.email;
+    var others = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me;})
       .sort(function(a,b){return a.createdAt<b.createdAt?1:-1;});
     var open=others.filter(function(r){return isOpen(r.status);}), closed=others.filter(function(r){return !isOpen(r.status);});
     var html='<div class="phead"><h1>Supervisión</h1><p>Solicitudes de tu equipo asignado. Vista de solo lectura: la decisión la toma el CEO.</p></div>';
@@ -406,12 +407,15 @@
 
   function viewNew(){
     var after=function(){ NewForm.mount(); };
+    var rosterOpts = '<option value="" disabled selected>Elige a la persona…</option>'+
+      state.roster.map(function(p){ return '<option value="'+esc(p.email)+'">'+esc(p.name)+' — '+esc(p.email)+'</option>'; }).join('');
     return { title:'Nueva solicitud', after:after, html:
-      '<div class="phead"><h1>Nueva solicitud de decisión</h1><p>El único canal para pedirle algo al CEO. El contexto es obligatorio: así la decisión se toma con el debido proceso.</p></div>'+
+      '<div class="phead"><h1>Nueva solicitud de decisión</h1><p>Pídele a cualquier persona que lea, apruebe, firme o decida. El contexto es obligatorio: así la decisión se toma con el debido proceso.</p></div>'+
       '<form class="card" id="newform" style="padding:24px;max-width:760px" onsubmit="return false">'+
-        '<div class="field"><label>¿Qué necesitas del CEO?</label><div class="typegrid" id="typegrid">'+
+        '<div class="field"><label>¿Qué necesitas?</label><div class="typegrid" id="typegrid">'+
           Object.keys(TYPE).map(function(t){ return '<button type="button" class="topt'+(t==='approve'?' on':'')+'" data-type="'+t+'"><span class="ti">'+TYPE_ICON[t]+'</span>'+TYPE[t]+'</button>'; }).join('')+
         '</div></div>'+
+        '<div class="field"><label for="f-to">¿A quién se lo pides? *</label><div class="hint">Cualquier persona de Superlikers.</div><select id="f-to" class="sel">'+rosterOpts+'</select></div>'+
         '<div class="field"><label for="f-title">Título *</label><input id="f-title" class="inp" maxlength="120" placeholder="Ej. Contrato de alianza con RappiPay"></div>'+
         '<div class="two"><div class="field"><label for="f-prio">Prioridad</label><select id="f-prio" class="sel">'+
           Object.keys(PRIO).map(function(p){return '<option value="'+p+'"'+(p==='medium'?' selected':'')+'>'+PRIO[p]+'</option>';}).join('')+'</select></div>'+
@@ -431,16 +435,16 @@
   function viewDetail(id){
     var r = findReq(id);
     if(!r){ return { title:'Solicitud', html:'<div class="empty"><div class="ic">🔍</div><p>No encontramos esa solicitud.</p><a class="link" href="#/">Volver</a></div>' }; }
-    var isCeo=state.user.role==='ceo';
+    var isAssignee = r.assigneeId===state.user.email;
     var isRequester = r.requesterId===state.user.email;
     var open=isOpen(r.status);
-    // acciones del CEO
-    var ceoActions='';
-    if(isCeo && open){
+    // acciones del destinatario
+    var actions='';
+    if(isAssignee && open){
       var primary = r.type==='sign'
         ? '<button class="btn btn--green" onclick="CeoDesk.act(\''+r.id+'\',\'sign\')">Firmar</button>'
         : '<button class="btn btn--green" onclick="CeoDesk.act(\''+r.id+'\',\'approve\')">Aprobar</button>';
-      ceoActions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Tu decisión</h3><div class="actionbar">'+
+      actions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Tu decisión</h3><div class="actionbar">'+
         primary+
         '<button class="btn btn--primary" onclick="CeoDesk.act(\''+r.id+'\',\'request_info\')">Pedir más información</button>'+
         '<button class="btn btn--red" onclick="CeoDesk.act(\''+r.id+'\',\'reject\')">Rechazar</button>'+
@@ -449,8 +453,8 @@
     // respuesta del solicitante cuando se pidió info
     var respond='';
     if(isRequester && r.status==='info_requested'){
-      respond='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">El CEO pidió más información</h3>'+
-        '<textarea class="ta" id="respond-box" placeholder="Responde aquí para devolverla a la bandeja del CEO…"></textarea>'+
+      respond='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Te pidieron más información</h3>'+
+        '<textarea class="ta" id="respond-box" placeholder="Responde aquí para devolverla a su bandeja…"></textarea>'+
         '<div style="margin-top:10px"><button class="btn btn--primary" onclick="CeoDesk.respond(\''+r.id+'\')">Responder y reenviar</button></div></div>';
     }
     var decision='';
@@ -467,7 +471,7 @@
       return '<div class="tli '+(EVENT_ACCENT[e.type]||'')+'"><div class="th"><b>'+esc(e.actorName)+'</b> '+(EVENT[e.type]||e.type)+'</div>'+
         '<div class="tt">'+esc(fmtDateTime(e.createdAt))+' · '+esc(rel(e.createdAt))+'</div>'+(e.note?'<div class="tn">'+esc(e.note)+'</div>':'')+'</div>';
     }).join('');
-    var commentCard = (isCeo || isRequester)
+    var commentCard = (isAssignee || isRequester)
       ? '<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Añadir comentario</h3>'+
           '<textarea class="ta" id="comment-box" placeholder="Escribe una nota para el hilo…"></textarea>'+
           '<div style="margin-top:10px"><button class="btn" onclick="CeoDesk.comment(\''+r.id+'\')">Comentar</button></div></div>'
@@ -482,10 +486,11 @@
           '<div class="dblock"><h3>Recomendación de quien solicita</h3><p>'+esc(r.recommendation)+'</p></div>'+
           '<div class="dblock"><h3>Impacto y urgencia</h3><p>'+esc(r.impact)+'</p></div>'+
           doc+decision+
-        '</div>'+ceoActions+respond+commentCard+
+        '</div>'+actions+respond+commentCard+
       '</div><div>'+
         '<div class="card" style="padding:18px">'+
           kv('Solicita', avatar(r.requesterName,24)+' '+esc(r.requesterName), true)+
+          kv('Para', avatar(r.assigneeName||'',24)+' '+esc(r.assigneeName||''), true)+
           (r.requesterTitle?kv('Cargo',esc(r.requesterTitle)):'')+
           kv('Tipo',TYPE[r.type])+kv('Creada',fmtDate(r.createdAt))+kv('Fecha límite',dueBadge(r.dueDate))+
         '</div>'+
@@ -511,11 +516,12 @@
     },
     submit:function(){
       var g=function(id){return document.getElementById(id).value.trim();};
-      var body={ type:NewForm.type, title:g('f-title'), priority:document.getElementById('f-prio').value,
+      var body={ type:NewForm.type, title:g('f-title'), assigneeId:document.getElementById('f-to').value, priority:document.getElementById('f-prio').value,
         context:g('f-ctx'), recommendation:g('f-rec'), impact:g('f-imp'),
         documentName:g('f-doc'), documentUrl:g('f-url'), documentVersion:g('f-ver'),
         dueDate: document.getElementById('f-due').value ? new Date(document.getElementById('f-due').value).toISOString() : null };
       var err=document.getElementById('f-err');
+      if(!body.assigneeId){ err.textContent='Elige a quién le haces la solicitud.'; err.style.display='flex'; return; }
       if(!body.title||!body.context||!body.recommendation||!body.impact){
         err.textContent='Completa los campos obligatorios: sin contexto, recomendación e impacto no se puede pedir una decisión.'; err.style.display='flex'; return;
       }

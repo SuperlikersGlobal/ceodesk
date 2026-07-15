@@ -1,14 +1,22 @@
-// Prueba de integración de la lógica del backend, con almacén en memoria.
-// Ejercita el ciclo completo: crear (líder) → pedir info (CEO) → responder
-// (líder) → firmar (CEO), y verifica el control de acceso por rol.
+// Pruebas de integración del backend con el modelo "cualquiera a cualquiera" +
+// visibilidad por organigrama. Almacén en memoria.
 //
-// Ejecutar:  CEODESK_MEMORY_STORE=1 AUTH_SECRET=test CEO_EMAILS=luis@iwin.im node --test
+// Ejecutar:  CEODESK_MEMORY_STORE=1 AUTH_SECRET=test node --test
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 process.env.CEODESK_MEMORY_STORE = '1'
 process.env.AUTH_SECRET = 'test-secret'
 process.env.CEO_EMAILS = 'luis@iwin.im'
+process.env.CHIEF_OF_STAFF = 'tatiana@iwin.im'
+process.env.ORG = JSON.stringify({
+  'luis@iwin.im': { n: 'Luis', l: null },
+  'tatiana@iwin.im': { n: 'Tatiana', l: 'luis@iwin.im' },
+  'angela@iwin.im': { n: 'Ángela', l: 'luis@iwin.im' },
+  'santiago@iwin.im': { n: 'Santiago', l: 'angela@iwin.im' },
+  'carlos@iwin.im': { n: 'Carlos', l: 'luis@iwin.im' },
+  'ana@iwin.im': { n: 'Ana', l: 'tatiana@iwin.im' },
+})
 
 const { signToken } = await import('../_lib/auth.js')
 const requests = (await import('../requests.js')).default
@@ -19,121 +27,86 @@ function req(method, path, token, body) {
   if (token) headers.set('authorization', 'Bearer ' + token)
   if (body) headers.set('content-type', 'application/json')
   return new Request('https://ceodesk.superlikers.com' + path, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
+    method, headers, body: body ? JSON.stringify(body) : undefined,
   })
 }
+const tok = (email, name, role) => signToken({ u: email, name, role: role || 'leader' })
+const luis = tok('luis@iwin.im', 'Luis', 'ceo')
+const tatiana = tok('tatiana@iwin.im', 'Tatiana')
+const angela = tok('angela@iwin.im', 'Ángela')
+const santiago = tok('santiago@iwin.im', 'Santiago')
+const carlos = tok('carlos@iwin.im', 'Carlos')
+const ana = tok('ana@iwin.im', 'Ana')
 
-const ceo = signToken({ u: 'luis@iwin.im', name: 'Luis', role: 'ceo', title: 'CEO' })
-const leader = signToken({ u: 'ana@iwin.im', name: 'Ana', role: 'leader', title: 'Líder de Producto' })
-const other = signToken({ u: 'carlos@iwin.im', name: 'Carlos', role: 'leader' })
+// Crea una solicitud de `token` dirigida a `to` (email). Devuelve la solicitud.
+async function create(token, to, extra = {}) {
+  const r = await requests(req('POST', '/api/requests', token, {
+    type: 'approve', title: 'T', context: 'c', recommendation: 'r', impact: 'i', assigneeId: to, ...extra,
+  }))
+  assert.equal(r.status, 201, 'create ' + (await r.clone().text()))
+  return (await r.json()).request
+}
+const list = async (token) => (await (await requests(req('GET', '/api/requests', token))).json()).requests
+const has = (rows, id) => rows.some((r) => r.id === id)
 
 test('requiere autenticación', async () => {
-  const r = await requests(req('GET', '/api/requests', null))
-  assert.equal(r.status, 401)
+  assert.equal((await requests(req('GET', '/api/requests', null))).status, 401)
 })
 
-test('el líder crea una solicitud con debido proceso', async () => {
-  const r = await requests(req('POST', '/api/requests', leader, {
-    type: 'sign', title: 'Contrato RappiPay', priority: 'urgent',
-    context: 'Alianza', recommendation: 'Firmar', impact: 'Entramos al ciclo de agosto',
-    documentName: 'Contrato.pdf', documentVersion: 'v3',
-  }))
-  assert.equal(r.status, 201)
-  const { request } = await r.json()
-  assert.equal(request.status, 'pending')
-  assert.equal(request.type, 'sign')
-  assert.match(request.code, /^CD-\d+$/)
-  assert.equal(request.requesterId, 'ana@iwin.im')
-  assert.equal(request.events.length, 1)
-  assert.equal(request.events[0].type, 'created')
+test('crear exige destinatario válido', async () => {
+  assert.equal((await requests(req('POST', '/api/requests', ana, { type: 'approve', title: 'T', context: 'c', recommendation: 'r', impact: 'i' }))).status, 400)
+  assert.equal((await requests(req('POST', '/api/requests', ana, { type: 'approve', title: 'T', context: 'c', recommendation: 'r', impact: 'i', assigneeId: 'nadie@iwin.im' }))).status, 400)
+  const ok = await create(ana, 'carlos@iwin.im')
+  assert.equal(ok.assigneeId, 'carlos@iwin.im')
+  assert.equal(ok.assigneeName, 'Carlos')
+  assert.equal(ok.requesterId, 'ana@iwin.im')
 })
 
-test('rechaza crear sin campos obligatorios', async () => {
-  const r = await requests(req('POST', '/api/requests', leader, { type: 'approve', title: 'X' }))
-  assert.equal(r.status, 400)
+test('any-to-any: el destinatario (no el CEO) decide', async () => {
+  const r = await create(ana, 'carlos@iwin.im') // Ana pide a Carlos
+  // Un tercero sin relación ni siquiera la ve
+  assert.equal((await requestAction(req('POST', '/api/request-action', santiago, { id: r.id, action: 'approve' }))).status, 404)
+  // El destinatario pide info; la solicitante responde; el destinatario aprueba
+  assert.equal((await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'request_info', note: '¿?' }))).status, 200)
+  assert.equal((await requestAction(req('POST', '/api/request-action', ana, { id: r.id, action: 'provide_info', note: 'ok' }))).status, 200)
+  const done = (await (await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'approve', note: 'listo' }))).json()).request
+  assert.equal(done.status, 'approved')
+  assert.equal(done.decidedByName, 'Carlos')
+  // Ana (solicitante) no puede aprobar lo suyo
+  const r2 = await create(ana, 'carlos@iwin.im')
+  assert.equal((await requestAction(req('POST', '/api/request-action', ana, { id: r2.id, action: 'approve' }))).status, 403)
 })
 
-test('ciclo completo: pedir info → responder → firmar', async () => {
-  const created = await (await requests(req('POST', '/api/requests', leader, {
-    type: 'sign', title: 'Contrato', context: 'c', recommendation: 'r', impact: 'i',
-  }))).json()
-  const id = created.request.id
-
-  // un líder NO puede firmar
-  let r = await requestAction(req('POST', '/api/request-action', leader, { id, action: 'sign' }))
-  assert.equal(r.status, 403)
-
-  // el CEO pide más info (requiere nota)
-  r = await requestAction(req('POST', '/api/request-action', ceo, { id, action: 'request_info', note: '¿CAC?' }))
-  assert.equal(r.status, 200)
-  assert.equal((await r.json()).request.status, 'info_requested')
-
-  // otro líder ni siquiera ve la solicitud → 404 (no revela su existencia)
-  r = await requestAction(req('POST', '/api/request-action', other, { id, action: 'provide_info', note: 'x' }))
-  assert.equal(r.status, 404)
-
-  // el solicitante responde → vuelve a revisión
-  r = await requestAction(req('POST', '/api/request-action', leader, { id, action: 'provide_info', note: 'CAC 42' }))
-  assert.equal((await r.json()).request.status, 'in_review')
-
-  // el CEO firma → registro de decisión
-  r = await requestAction(req('POST', '/api/request-action', ceo, { id, action: 'sign', note: 'Verificado' }))
-  const signed = (await r.json()).request
-  assert.equal(signed.status, 'signed')
-  assert.equal(signed.decidedByName, 'Luis')
-  assert.equal(signed.decisionNote, 'Verificado')
-  assert.ok(signed.decidedAt)
-
-  // no se puede re-decidir una cerrada
-  r = await requestAction(req('POST', '/api/request-action', ceo, { id, action: 'approve' }))
-  assert.equal(r.status, 409)
-
-  // el historial refleja toda la secuencia
-  const types = signed.events.map((e) => e.type)
-  assert.deepEqual(types, ['created', 'info_requested', 'info_provided', 'signed'])
+test('organigrama: el líder ve lo que su equipo envía Y lo que le asignan', async () => {
+  const enviada = await create(santiago, 'luis@iwin.im')   // Santiago (reporta a Ángela) envía
+  const recibida = await create(carlos, 'santiago@iwin.im') // a Santiago le asignan algo
+  // Ángela (jefa de Santiago) ve ambas
+  const ang = await list(angela)
+  assert.ok(has(ang, enviada.id), 'Ángela ve lo que envía Santiago')
+  assert.ok(has(ang, recibida.id), 'Ángela ve lo que le asignan a Santiago')
+  // Carlos (no es jefe de Santiago) no ve la que Santiago envió a Luis
+  assert.ok(!has(await list(carlos), enviada.id))
 })
 
-test('GET por id devuelve la solicitud; id inexistente = 404', async () => {
-  const created = await (await requests(req('POST', '/api/requests', leader, {
-    type: 'approve', title: 'T', context: 'c', recommendation: 'r', impact: 'i',
-  }))).json()
-  let r = await requests(req('GET', '/api/requests?id=' + created.request.id, ceo))
-  assert.equal(r.status, 200)
-  r = await requests(req('GET', '/api/requests?id=noexiste', ceo))
-  assert.equal(r.status, 404)
+test('transitividad: el CEO ve todo; un nivel intermedio ve su subárbol', async () => {
+  const r = await create(santiago, 'ana@iwin.im') // Santiago -> Ana
+  assert.ok(has(await list(luis), r.id), 'Luis (raíz) ve todo')
+  // Ángela es ancestro de Santiago -> lo ve
+  assert.ok(has(await list(angela), r.id))
 })
 
-test('privacidad: un líder NO ve las solicitudes de otro', async () => {
-  const created = (await (await requests(req('POST', '/api/requests', leader, {
-    type: 'approve', title: 'Privado de Ana', context: 'c', recommendation: 'r', impact: 'i',
-  }))).json()).request
-
-  // Otro líder: no aparece en la lista y por id da 404 (no revela existencia)
-  const list = (await (await requests(req('GET', '/api/requests', other))).json()).requests
-  assert.ok(!list.some((r) => r.id === created.id), 'carlos no debe ver la de ana')
-  assert.equal((await requests(req('GET', '/api/requests?id=' + created.id, other))).status, 404)
-  // Tampoco puede actuar sobre ella (404: ni siquiera la ve)
-  assert.equal((await requestAction(req('POST', '/api/request-action', other, { id: created.id, action: 'approve' }))).status, 404)
-
-  // La solicitante sí la ve; el CEO también
-  assert.ok((await (await requests(req('GET', '/api/requests', leader))).json()).requests.some((r) => r.id === created.id))
-  assert.ok((await (await requests(req('GET', '/api/requests', ceo))).json()).requests.some((r) => r.id === created.id))
+test('Chief of Staff ve todo lo asignado al CEO', async () => {
+  const r = await create(carlos, 'luis@iwin.im') // Carlos pide al CEO; Carlos no está en el subárbol de Tatiana
+  assert.ok(has(await list(tatiana), r.id), 'Tatiana ve la bandeja del CEO')
+  // Ángela NO la ve (Carlos no es su reporte y no es asignada a su equipo)
+  assert.ok(!has(await list(angela), r.id))
 })
 
-test('delegación: un supervisor ve el grupo asignado pero no puede decidir', async () => {
-  process.env.VIEWER_DELEGATIONS = JSON.stringify({ 'angela@iwin.im': ['ana@iwin.im'] })
-  const angela = signToken({ u: 'angela@iwin.im', name: 'Ángela', role: 'leader' })
-  const created = (await (await requests(req('POST', '/api/requests', leader, {
-    type: 'sign', title: 'Para supervisar', context: 'c', recommendation: 'r', impact: 'i',
-  }))).json()).request
-
-  // Ángela ve la de Ana (delegada); Carlos (sin delegación) no
-  assert.ok((await (await requests(req('GET', '/api/requests', angela))).json()).requests.some((r) => r.id === created.id))
-  assert.ok(!(await (await requests(req('GET', '/api/requests', other))).json()).requests.some((r) => r.id === created.id))
-  // Ángela puede verla por id, pero no decidir (no es CEO ni solicitante)
-  assert.equal((await requests(req('GET', '/api/requests?id=' + created.id, angela))).status, 200)
-  assert.equal((await requestAction(req('POST', '/api/request-action', angela, { id: created.id, action: 'sign' }))).status, 403)
-  delete process.env.VIEWER_DELEGATIONS
+test('privacidad entre pares: sin relación, no se ve', async () => {
+  const r = await create(carlos, 'ana@iwin.im') // Carlos -> Ana
+  assert.ok(!has(await list(santiago), r.id), 'Santiago no ve lo de Carlos->Ana')
+  assert.equal((await requests(req('GET', '/api/requests?id=' + r.id, santiago))).status, 404)
+  // Requester y assignee sí
+  assert.ok(has(await list(carlos), r.id))
+  assert.ok(has(await list(ana), r.id))
 })
