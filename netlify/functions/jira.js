@@ -32,16 +32,26 @@ export default async (req) => {
     return json({ error: 'Operación no válida.' }, 400)
   }
 
+  // 1) Resolver el token. Si el refresh falla, el token está revocado → reconectar.
+  let rec
   try {
-    const rec = await validRecord(u.u)
-    if (!rec) return json({ enabled: true, connected: false, issues: [] })
+    rec = await validRecord(u.u)
+  } catch (e) {
+    return json({ enabled: true, connected: false, issues: [], error: 'Jira necesita reconexión.', detail: String(e.message || e).slice(0, 160) })
+  }
+  if (!rec) return json({ enabled: true, connected: false, issues: [] })
+
+  // 2) Traer los issues. Un fallo aquí NO desconecta: sigue conectado, sin issues.
+  try {
     const issues = await fetchMyIssues(rec.accessToken, rec.cloudId)
     return json({
       enabled: true, connected: true, site: rec.siteName || rec.siteUrl,
       issues: issues.map((it) => projectIssue(it, rec.siteUrl)),
     })
   } catch (e) {
-    // Token revocado / refresh fallido: pedir reconexión (no es un error duro).
-    return json({ enabled: true, connected: false, issues: [], error: 'Jira necesita reconexión.', detail: String(e.message || e).slice(0, 160) })
+    return json({
+      enabled: true, connected: true, site: rec.siteName || rec.siteUrl, issues: [],
+      error: 'No pudimos traer tus issues de Jira ahora mismo.', detail: String(e.message || e).slice(0, 160),
+    })
   }
 }
