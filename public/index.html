@@ -176,6 +176,14 @@
   .mrow__fill{height:100%;background:var(--brand);border-radius:6px;min-width:2px}
   .mrow__val{width:32px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
   @media (max-width:820px){.mgrid{grid-template-columns:1fr}.mrow__label{width:120px}}
+  /* Etiquetas */
+  .lbls{display:inline-flex;gap:5px;flex-wrap:wrap;vertical-align:middle}
+  .lbl{display:inline-flex;align-items:center;gap:4px;background:var(--slate-soft);color:var(--slate);border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:650;white-space:nowrap}
+  .taginput{display:flex;flex-wrap:wrap;gap:6px;border:1px solid var(--border-strong);border-radius:9px;padding:7px 8px;background:var(--surface)}
+  .taginput:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .taginput .lbl{background:var(--brand-soft);color:var(--brand-ink);font-size:12.5px;padding:3px 8px}
+  .taginput .lbl b{cursor:pointer;font-weight:800;opacity:.6;margin-left:1px}
+  .taginput input{border:0;outline:0;flex:1;min-width:120px;font-size:13.5px;background:transparent;color:var(--ink)}
   .menu-btn{display:none}
   @media (max-width:900px){.split{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.typegrid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
   @media (max-width:720px){
@@ -204,7 +212,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'' };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -221,6 +229,8 @@
   function statusBadge(s){ return '<span class="badge bdot b-'+STATUS_TONE[s]+'">'+STATUS[s]+'</span>'; }
   function prioBadge(p){ var tone=p==='urgent'?'red':p==='high'?'amber':p==='medium'?'blue':'slate'; return '<span class="badge b-'+tone+'">'+PRIO[p]+'</span>'; }
   function dueBadge(iso){ var d=dueInfo(iso); return '<span class="due '+d.tone+'">'+esc(d.label)+'</span>'; }
+  function labelChips(r){ return (r.labels&&r.labels.length)?'<span class="lbls">'+r.labels.map(function(l){return '<span class="lbl">'+esc(l)+'</span>';}).join('')+'</span>':''; }
+  function allLabels(){ var s={}; state.requests.forEach(function(r){ (r.labels||[]).forEach(function(l){ s[l]=1; }); }); return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'es');}); }
 
   // ---------- api ----------
   function api(path, opts){
@@ -363,7 +373,8 @@
       avatar(r.requesterName)+
       '<span class="rmain"><span class="rtitle"><span class="rcode">'+esc(r.code)+'</span> '+esc(r.title)+'</span>'+
         '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
-        (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+'</span></span>'+
+        (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+
+        (r.labels&&r.labels.length?'<span>·</span>'+labelChips(r):'')+'</span></span>'+
       '<span class="rside">'+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
   }
   function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
@@ -479,6 +490,7 @@
       ' onclick="location.hash=\'#/solicitud/'+r.id+'\'" style="border-left:3px solid '+PRIO_COLOR[r.priority]+'">'+
       '<div class="kcard__title">'+esc(r.title)+'</div>'+
       '<div class="kcard__meta"><span class="rcode">'+esc(r.code)+'</span>'+(r.area?' · '+esc(r.area):'')+' · '+esc(r.requesterName)+'</div>'+
+      (r.labels&&r.labels.length?'<div style="margin-top:7px">'+labelChips(r)+'</div>':'')+
       '<div class="kcard__foot">'+avatar(r.assigneeName||'',22)+dueBadge(r.dueDate)+'</div></div>';
   }
   function viewBoard(){
@@ -487,16 +499,25 @@
     var K=BOARD_KINDS[kind];
     var scope=state.boardScope||(state.user.sup?'all':'mine');
     var area=state.boardArea||'';
+    var label=state.boardLabel||'';
     var items0=state.requests.filter(function(r){return r.type===K.type;});
     if(scope==='mine') items0=items0.filter(function(r){return r.assigneeId===me;});
     if(area) items0=items0.filter(function(r){return r.area===area;});
+    if(label) items0=items0.filter(function(r){return (r.labels||[]).indexOf(label)>=0;});
     var areaOpts='<option value="">Todas las áreas</option>'+((state.config&&state.config.areas)||[]).map(function(a){return '<option'+(a===area?' selected':'')+'>'+esc(a)+'</option>';}).join('');
+    var labelOpts='<option value="">Todas las etiquetas</option>'+allLabels().map(function(l){return '<option'+(l===label?' selected':'')+'>'+esc(l)+'</option>';}).join('');
     var kindChips=Object.keys(BOARD_KINDS).map(function(k){return '<button class="chip'+(k===kind?' on':'')+'" onclick="CeoDesk.boardKind(\''+k+'\')">'+BOARD_KINDS[k].label+'</button>';}).join('');
     var toolbar='<div class="toolbar">'+kindChips+
       '<span style="width:12px"></span>'+
       '<button class="chip'+(scope==='mine'?' on':'')+'" onclick="CeoDesk.boardScope(\'mine\')">Míos</button>'+
       (state.user.sup?'<button class="chip'+(scope==='all'?' on':'')+'" onclick="CeoDesk.boardScope(\'all\')">Los que veo</button>':'')+
       '<select class="sel" style="width:auto;margin-left:auto" onchange="CeoDesk.boardArea(this.value)">'+areaOpts+'</select>'+
+      '<select class="sel" style="width:auto" onchange="CeoDesk.boardLabel(this.value)">'+labelOpts+'</select>'+
+    '</div>';
+    var views=loadViews();
+    var savedRow='<div class="toolbar">'+
+      views.map(function(v,i){return '<button class="chip" onclick="CeoDesk.applyView('+i+')">'+esc(v.name)+' <b onclick="event.stopPropagation();CeoDesk.delView('+i+')" style="opacity:.55;font-weight:800">×</b></button>';}).join('')+
+      '<button class="chip" onclick="CeoDesk.saveView()">＋ Guardar vista actual</button>'+
     '</div>';
     var board='<div class="kanban">'+K.cols.map(function(c){
       var items=items0.filter(function(r){return r.status===c[0];});
@@ -505,8 +526,10 @@
         '<div class="kcol__head">'+c[1]+' <span class="kcount">'+items.length+'</span></div>'+
         '<div class="kcol__body">'+(cards||'<div class="kempty">—</div>')+'</div></div>';
     }).join('')+'</div>';
-    return { title:'Tablero', html:'<div class="phead"><h1>Tablero</h1><p>'+(kind==='bug'?'Incidencias':'Tareas')+' por estado. Arrastra una tarjeta para moverla (solo si es tuya).</p></div>'+toolbar+board };
+    return { title:'Tablero', html:'<div class="phead"><h1>Tablero</h1><p>'+(kind==='bug'?'Incidencias':'Tareas')+' por estado. Arrastra una tarjeta para moverla (solo si es tuya).</p></div>'+toolbar+savedRow+board };
   }
+  function loadViews(){ try{ return JSON.parse(localStorage.getItem('ceodesk_views')||'[]'); }catch(e){ return []; } }
+  function saveViews(v){ try{ localStorage.setItem('ceodesk_views', JSON.stringify(v)); }catch(e){} }
   var DRAG={id:null,from:null};
   function colAction(kind,from,to){
     if(from===to) return null;
@@ -537,6 +560,7 @@
     var rosterOpts = '<option value="" disabled selected>Elige a la persona…</option>'+
       state.roster.map(function(p){ return '<option value="'+esc(p.email)+'">'+esc(p.name)+' — '+esc(p.email)+'</option>'; }).join('');
     var areaOpts = ((state.config&&state.config.areas)||[]).map(function(a){ return '<option>'+esc(a)+'</option>'; }).join('');
+    var labelDatalist = allLabels().map(function(l){ return '<option value="'+esc(l)+'"></option>'; }).join('');
     return { title:'Nueva solicitud', after:after, html:
       '<div class="phead"><h1>Nueva solicitud de decisión</h1><p>Pídele a cualquier persona que lea, apruebe, firme o decida. El contexto es obligatorio: así la decisión se toma con el debido proceso.</p></div>'+
       '<form class="card" id="newform" style="padding:24px;max-width:760px" onsubmit="return false">'+
@@ -549,6 +573,7 @@
           Object.keys(PRIO).map(function(p){return '<option value="'+p+'"'+(p==='medium'?' selected':'')+'>'+PRIO[p]+'</option>';}).join('')+'</select></div>'+
           '<div class="field"><label for="f-due">Fecha límite</label><input id="f-due" type="date" class="inp"></div></div>'+
         '<div class="field"><label for="f-area">Área / Proyecto</label><select id="f-area" class="sel"><option value="">— Sin área —</option>'+areaOpts+'</select></div>'+
+        '<div class="field"><label for="f-lbl">Etiquetas</label><div class="hint">Escribe y Enter (o coma). Autocompleta con las ya usadas.</div><div class="taginput" id="f-tags"><input id="f-lbl" list="f-lbl-list" placeholder="ej. campaña-Q3, deuda-técnica"></div><datalist id="f-lbl-list">'+labelDatalist+'</datalist></div>'+
         '<div class="field"><label for="f-ctx">Descripción / contexto *</label><div class="hint">Explica qué es y da el trasfondo suficiente.</div><textarea id="f-ctx" class="ta"></textarea></div>'+
         '<div id="decision-fields">'+
         '<div class="field"><label for="f-rec">Tu recomendación *</label><div class="hint">No traigas solo el problema — trae tu propuesta.</div><textarea id="f-rec" class="ta"></textarea></div>'+
@@ -636,7 +661,8 @@
       '<div class="split"><div>'+
         '<div class="card" style="padding:24px">'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'+typeBadge(r.type)+statusBadge(r.status)+prioBadge(r.priority)+'<span class="rcode">'+esc(r.code)+'</span></div>'+
-          '<h1 style="margin:0 0 16px;font-size:22px">'+esc(r.title)+'</h1>'+
+          '<h1 style="margin:0 0 '+(r.labels&&r.labels.length?'10':'16')+'px;font-size:22px">'+esc(r.title)+'</h1>'+
+          (r.labels&&r.labels.length?'<div style="margin-bottom:16px">'+labelChips(r)+'</div>':'')+
           '<div class="dblock"><h3>'+(DECISION_TYPES.indexOf(r.type)>=0?'Contexto':'Descripción')+'</h3><p>'+esc(r.context)+'</p></div>'+
           (r.recommendation?'<div class="dblock"><h3>Recomendación de quien solicita</h3><p>'+esc(r.recommendation)+'</p></div>':'')+
           (r.impact?'<div class="dblock"><h3>Impacto y urgencia</h3><p>'+esc(r.impact)+'</p></div>':'')+
@@ -660,8 +686,9 @@
   // ---------- new form controller ----------
   var NewForm = {
     type:'task',
+    labels:[],
     mount:function(){
-      NewForm.type='task';
+      NewForm.type='task'; NewForm.labels=[];
       var grid=document.getElementById('typegrid');
       NewForm.syncFields();
       grid.addEventListener('click',function(e){ var b=e.target.closest('.topt'); if(!b) return;
@@ -669,7 +696,29 @@
         Array.prototype.forEach.call(grid.children,function(c){c.classList.toggle('on',c===b);});
         NewForm.syncFields();
       });
+      var ti=document.getElementById('f-lbl');
+      if(ti){
+        ti.addEventListener('keydown',function(e){
+          if(e.key==='Enter'||e.key===','){ e.preventDefault(); NewForm.addLabel(ti.value); ti.value=''; }
+          else if(e.key==='Backspace'&&!ti.value&&NewForm.labels.length){ NewForm.removeLabel(NewForm.labels.length-1); }
+        });
+        ti.addEventListener('input',function(){ if(ti.value.indexOf(',')>=0){ ti.value.split(',').forEach(function(p){NewForm.addLabel(p);}); ti.value=''; } });
+        ti.addEventListener('blur',function(){ if(ti.value.trim()){ NewForm.addLabel(ti.value); ti.value=''; } });
+      }
       document.getElementById('f-submit').addEventListener('click',NewForm.submit);
+    },
+    addLabel:function(v){ v=String(v||'').trim().slice(0,30); if(!v) return;
+      if(NewForm.labels.some(function(x){return x.toLowerCase()===v.toLowerCase();})) return;
+      if(NewForm.labels.length>=8) return; NewForm.labels.push(v); NewForm.renderTags(); },
+    removeLabel:function(i){ NewForm.labels.splice(i,1); NewForm.renderTags(); },
+    renderTags:function(){
+      var c=document.getElementById('f-tags'), ti=document.getElementById('f-lbl'); if(!c||!ti) return;
+      Array.prototype.slice.call(c.querySelectorAll('.lbl')).forEach(function(n){n.remove();});
+      NewForm.labels.forEach(function(l,i){
+        var span=document.createElement('span'); span.className='lbl'; span.textContent=l+' ';
+        var b=document.createElement('b'); b.textContent='×'; b.onclick=function(){ NewForm.removeLabel(i); };
+        span.appendChild(b); c.insertBefore(span, ti);
+      });
     },
     syncFields:function(){
       var dec = DECISION_TYPES.indexOf(NewForm.type)>=0;
@@ -678,7 +727,7 @@
     submit:function(){
       var g=function(id){return document.getElementById(id).value.trim();};
       var body={ type:NewForm.type, title:g('f-title'), assigneeId:document.getElementById('f-to').value, priority:document.getElementById('f-prio').value,
-        area:document.getElementById('f-area').value,
+        area:document.getElementById('f-area').value, labels:NewForm.labels.slice(),
         context:g('f-ctx'), recommendation:g('f-rec'), impact:g('f-imp'),
         documentName:g('f-doc'), documentUrl:g('f-url'), documentVersion:g('f-ver'),
         dueDate: document.getElementById('f-due').value ? new Date(document.getElementById('f-due').value).toISOString() : null };
@@ -760,7 +809,10 @@
 
   // expose
   window.CeoDesk = { logout:logout, setFilter:function(f){state.listFilter=f;render();}, setHist:function(f){state.histFilter=f;render();},
-    boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();}, boardKind:function(v){state.boardKind=v;render();},
+    boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();}, boardKind:function(v){state.boardKind=v;render();}, boardLabel:function(v){state.boardLabel=v;render();},
+    saveView:function(){ var n=prompt('Nombre de la vista:'); if(!n||!n.trim()) return; var v=loadViews(); v.push({name:n.trim().slice(0,30),kind:state.boardKind,scope:state.boardScope,area:state.boardArea,label:state.boardLabel}); saveViews(v); render(); },
+    applyView:function(i){ var v=loadViews()[i]; if(!v) return; state.boardKind=v.kind||'task'; state.boardScope=v.scope||''; state.boardArea=v.area||''; state.boardLabel=v.label||''; render(); },
+    delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu };
 

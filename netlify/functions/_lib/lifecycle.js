@@ -113,6 +113,7 @@ export function buildRequest(input, code, requester, assignee, now = new Date().
     assigneeId: assignee.email,
     assigneeName: assignee.name,
     area: input.area || null,
+    labels: Array.isArray(input.labels) ? input.labels : [],
     context: input.context,
     recommendation: input.recommendation || null,
     impact: input.impact || null,

@@ -130,6 +130,14 @@ test('tipo Incidencia/Bug: abierta -> en curso -> resuelta -> cerrada (por el re
   assert.equal((await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'approve' }))).status, 400)
 })
 
+test('etiquetas: se guardan sin duplicados (case-insensitive)', async () => {
+  const r = (await (await requests(req('POST', '/api/requests', ana, {
+    type: 'task', title: 'T', context: 'c', assigneeId: 'carlos@iwin.im',
+    labels: ['Campaña-Q3', 'deuda-técnica', 'campaña-q3', '', '  '],
+  }))).json()).request
+  assert.deepEqual(r.labels, ['Campaña-Q3', 'deuda-técnica'])
+})
+
 test('la decisión sigue exigiendo recomendación e impacto', async () => {
   assert.equal((await requests(req('POST', '/api/requests', ana, { type: 'approve', title: 'X', context: 'c', assigneeId: 'carlos@iwin.im' }))).status, 400)
 })

@@ -7,15 +7,33 @@ import { buildRequest, REQUEST_TYPES, PRIORITIES, isDecisionType } from './_lib/
 import { canViewRequest, defaultAssignee } from './_lib/users.js'
 import { nameFor } from './_lib/org.js'
 
-// Rellena destinatario en solicitudes antiguas (antes todo iba al CEO).
+// Rellena campos nuevos en ítems antiguos (destinatario, etiquetas).
 function normalize(r) {
   if (!r) return r
-  if (!r.assigneeId) {
+  let out = r
+  if (!out.assigneeId) {
     const a = defaultAssignee()
-    return { ...r, assigneeId: a, assigneeName: nameFor(a) || 'CEO' }
+    out = { ...out, assigneeId: a, assigneeName: nameFor(a) || 'CEO' }
+  } else if (!out.assigneeName) {
+    out = { ...out, assigneeName: nameFor(out.assigneeId) || out.assigneeId }
   }
-  if (!r.assigneeName) return { ...r, assigneeName: nameFor(r.assigneeId) || r.assigneeId }
-  return r
+  if (!Array.isArray(out.labels)) out = { ...out, labels: [] }
+  return out
+}
+
+// Etiquetas: array de textos cortos, sin duplicados (case-insensitive), acotado.
+function cleanLabels(v) {
+  if (!Array.isArray(v)) return []
+  const seen = new Set(); const out = []
+  for (const x of v) {
+    const s = String(x || '').trim().slice(0, 30)
+    if (!s) continue
+    const k = s.toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k); out.push(s)
+    if (out.length >= 8) break
+  }
+  return out
 }
 
 export default async (req) => {
@@ -61,6 +79,7 @@ export default async (req) => {
       type: body.type,
       priority: PRIORITIES.includes(body.priority) ? body.priority : 'medium',
       area: (body.area || '').trim() || null,
+      labels: cleanLabels(body.labels),
       context: body.context.trim(),
       recommendation: (body.recommendation || '').trim() || null,
       impact: (body.impact || '').trim() || null,
