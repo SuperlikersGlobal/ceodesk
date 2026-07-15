@@ -123,7 +123,11 @@ contra las 6 listas de Luis. CeoDesk es la interfaz principal de consulta; LADCC
 
 Puntos clave de la implementación (no cambiar sin actualizar el contrato):
 
-- **Solo el CEO** tiene Google Tasks en el hub (la cuenta impersonada es la suya).
+- **CEO (modo hub):** ve las 6 listas de Luis, sincronizadas con LADCC (siempre activo).
+- **Líderes (modo propio, opt-in):** cada líder puede **Conectar Google Tasks** y ver/gestionar
+  **sus propias listas** (se impersona su propio correo con el mismo Service Account; la
+  delegación de dominio cubre a todo `@iwin.im`). No escriben el marcador `· meta` (es del hub).
+  El opt-in se guarda por usuario en el store `ceodesk-prefs`. Los miembros sin equipo no acceden.
 - **Autenticación:** cuenta de servicio con delegación de dominio, scope
   `auth/tasks`, impersonando `GOOGLE_TASKS_IMPERSONATE`. Se puede **reutilizar la
   misma cuenta de servicio del CRM** (el scope ya está autorizado en Workspace).

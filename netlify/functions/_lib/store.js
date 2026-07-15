@@ -56,6 +56,20 @@ export async function saveGtaskOverlay(gid, patch) {
   return next
 }
 
+// Preferencias por usuario (p. ej. si un líder conectó Google Tasks). key = email.
+export const prefsStore = () => store('ceodesk-prefs')
+
+export async function getUserPrefs(email) {
+  return (await prefsStore().get(String(email || '').toLowerCase(), { type: 'json' })) || {}
+}
+
+export async function setUserPref(email, patch) {
+  const s = prefsStore(); const key = String(email || '').toLowerCase()
+  const next = { ...((await s.get(key, { type: 'json' })) || {}), ...patch }
+  await s.setJSON(key, next)
+  return next
+}
+
 // Todos los overlays (para fusionarlos con la lista de Google Tasks).
 export async function listGtaskOverlays() {
   const s = gtasksStore()

@@ -224,7 +224,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[] };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -284,11 +284,13 @@
   }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
   function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
-  // Google Tasks (hub compartido): solo el CEO tiene tareas propias en el hub.
+  // Google Tasks: el CEO ve el hub (6 listas); los líderes, sus propias listas (opt-in).
   function loadGtasks(){
-    if(!state.user || state.user.role!=='ceo'){ state.gtasks=[]; state.gtasksEnabled=false; return Promise.resolve(); }
-    return api('/google-tasks').then(function(d){ state.gtasksEnabled=!!d.enabled; state.gtasks=d.tasks||[]; })
-      .catch(function(){ state.gtasks=[]; state.gtasksEnabled=false; });
+    if(!state.user || !(state.user.role==='ceo' || state.user.sup)){ state.gtasks=[]; state.gtasksEnabled=false; state.gtasksConnected=false; return Promise.resolve(); }
+    return api('/google-tasks').then(function(d){
+      state.gtasksEnabled=!!d.enabled; state.gtasksConnected=!!d.connected;
+      state.gtasksMode=d.mode||''; state.gtasksLists=d.lists||[]; state.gtasks=d.tasks||[];
+    }).catch(function(){ state.gtasks=[]; state.gtasksEnabled=false; state.gtasksConnected=false; });
   }
 
   function showLogin(msg){
@@ -421,22 +423,37 @@
       '<div class="gt-act">'+acts+'</div></div>';
   }
   function gtSection(){
-    if(state.user.role!=='ceo' || !state.gtasksEnabled) return '';
-    var lists = ['Superlikers','LADCC','DCDG','LIH','La Isabella','DCC'];
-    var listOpts = lists.map(function(l){return '<option value="'+esc(l)+'">'+esc(l)+'</option>';}).join('');
-    var impOpts = '<option value="">Importancia…</option>'+['Alta','Media','Baja'].map(function(v){return '<option>'+v+'</option>';}).join('');
-    var urgOpts = '<option value="">Urgencia…</option>'+['Hoy','Pronto','Esta semana','Sin prisa'].map(function(v){return '<option>'+v+'</option>';}).join('');
+    var isCeoUser = state.user.role==='ceo';
+    if(!(isCeoUser || state.user.sup) || !state.gtasksEnabled) return '';
+    var sub = isCeoUser ? '— tu sistema personal (6 listas), sincronizado con LADCC' : '— tus tareas de Google Tasks';
+    // Líder que aún no ha conectado: mostrar el opt-in.
+    if(!isCeoUser && !state.gtasksConnected){
+      return '<div class="rowlbl" style="margin-top:26px">Google Tasks '+
+        '<span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">'+sub+'</span></div>'+
+        '<div class="gt-add" style="justify-content:space-between">'+
+          '<span style="color:var(--muted);font-size:13px">Conecta tu cuenta de Google para ver y gestionar tus tareas de Google Tasks aquí, junto a tu trabajo de CeoDesk.</span>'+
+          '<button class="btn btn--primary" onclick="CeoDesk.gtConnect()"'+(state.gtBusy?' disabled':'')+'>🔗 Conectar Google Tasks</button>'+
+        '</div>';
+    }
+    var lists = (state.gtasksLists&&state.gtasksLists.length) ? state.gtasksLists
+      : (isCeoUser ? ['Superlikers','LADCC','DCDG','LIH','La Isabella','DCC'] : []);
+    var listSel = lists.length ? '<select id="gt-list">'+lists.map(function(l){return '<option value="'+esc(l)+'">'+esc(l)+'</option>';}).join('')+'</select>' : '';
+    var metaSel = '';
+    if(isCeoUser){
+      var impOpts = '<option value="">Importancia…</option>'+['Alta','Media','Baja'].map(function(v){return '<option>'+v+'</option>';}).join('');
+      var urgOpts = '<option value="">Urgencia…</option>'+['Hoy','Pronto','Esta semana','Sin prisa'].map(function(v){return '<option>'+v+'</option>';}).join('');
+      metaSel = '<select id="gt-imp">'+impOpts+'</select><select id="gt-urg">'+urgOpts+'</select>';
+    }
     var open = state.gtasks.filter(function(t){return t.status!=='done';});
     var add = '<div class="gt-add">'+
       '<input id="gt-title" placeholder="Captura rápida: nueva tarea…" onkeydown="if(event.key===\'Enter\')CeoDesk.gtCreate()">'+
-      '<select id="gt-list">'+listOpts+'</select>'+
-      '<select id="gt-imp">'+impOpts+'</select>'+
-      '<select id="gt-urg">'+urgOpts+'</select>'+
+      listSel+metaSel+
       '<button class="btn btn--primary" onclick="CeoDesk.gtCreate()"'+(state.gtBusy?' disabled':'')+'>＋ Añadir</button></div>';
     var list = open.length ? '<div class="rows">'+open.map(gtCard).join('')+'</div>'
       : '<p style="color:var(--muted);font-size:13px">Sin tareas de Google pendientes.</p>';
+    var disconnect = isCeoUser ? '' : ' <a class="link" style="font-size:12px;font-weight:600;cursor:pointer" onclick="CeoDesk.gtDisconnect()">Desconectar</a>';
     return '<div class="rowlbl" style="margin-top:26px">Google Tasks · '+open.length+
-      ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— tu sistema personal (6 listas), sincronizado con LADCC</span></div>'+add+list;
+      ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">'+sub+'</span>'+disconnect+'</div>'+add+list;
   }
 
   function viewInbox(){
@@ -887,6 +904,22 @@
       .then(function(){ state.gtBusy=false; render(); })
       .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
   }
+  function gtConnect(){
+    if(state.gtBusy) return; state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:'connect'}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+  function gtDisconnect(){
+    if(state.gtBusy) return;
+    if(!confirm('¿Desconectar Google Tasks? Dejarás de ver tus tareas de Google aquí (no se borra nada en Google).')) return;
+    state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:'disconnect'}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
 
   function toggleMenu(){ var s=document.getElementById('side'); if(s) s.classList.toggle('open'); }
   function closeMenu(){ var s=document.getElementById('side'); if(s) s.classList.remove('open'); }
@@ -899,7 +932,7 @@
     delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
-    gtCreate:gtCreate, gtAct:gtAct };
+    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect };
 
   window.addEventListener('hashchange', function(){ if(state.user) render(); });
   boot();

@@ -91,10 +91,10 @@ export function composeEditNotes(description, prevNotes) {
 
 // ─── Acceso a la API de Google Tasks ─────────────────────────────────────────
 
-async function token() {
-  const subject = hubSubject()
-  if (!subject) return null
-  return accessTokenFor(subject, [SCOPE])
+async function token(subject) {
+  const subj = subject || hubSubject()
+  if (!subj) return null
+  return accessTokenFor(subj, [SCOPE])
 }
 
 async function apiFetch(accessToken, path, opts = {}) {
@@ -115,15 +115,21 @@ async function fetchLists(accessToken) {
   return j.items || []
 }
 
-// Resuelve las 6 listas del hub (id + título) presentes en la cuenta.
-async function hubListsOf(accessToken) {
+// Listas visibles según el modo: hub (las 6 de Luis) o propias (todas las del usuario).
+async function listsFor(accessToken, onlyHub) {
+  const all = await fetchLists(accessToken)
+  if (!onlyHub) return all
   const wanted = new Set(HUB_LISTS.map(norm))
-  return (await fetchLists(accessToken)).filter((l) => wanted.has(norm(l.title)))
+  return all.filter((l) => wanted.has(norm(l.title)))
 }
 
-function pickList(lists, listName) {
-  const byName = (name) => lists.find((l) => norm(l.title) === norm(name))
-  return byName(listName) || byName(DEFAULT_LIST) || lists[0] || null
+// Elige la lista destino al crear. Hub: por nombre → Superlikers → 1ª. Propio:
+// por nombre → la lista predeterminada del usuario (@default).
+function pickList(lists, listName, onlyHub) {
+  const byName = lists.find((l) => norm(l.title) === norm(listName || ''))
+  if (byName) return byName
+  if (onlyHub) return lists.find((l) => norm(l.title) === norm(DEFAULT_LIST)) || lists[0] || { id: '@default', title: '@default' }
+  return { id: '@default', title: '(predeterminada)' }
 }
 
 // Proyecta una tarea de la API al shape que consume CeoDesk.
@@ -143,12 +149,13 @@ function project(t, list) {
   }
 }
 
-// Lista las tareas de las 6 listas del hub (per-user: la cuenta de Luis).
-export async function listHubTasks({ showCompleted = false } = {}) {
+// Lista tareas. onlyHub=true (CEO): las 6 listas de Luis. onlyHub=false (líder):
+// todas las listas de SU propia cuenta (subject = su correo).
+export async function listTasks({ subject = null, onlyHub = false, showCompleted = false } = {}) {
   if (!googleSAEnabled()) return { ok: false, reason: 'not_configured', tasks: [] }
-  const accessToken = await token()
+  const accessToken = await token(subject)
   if (!accessToken) return { ok: false, reason: 'no_subject', tasks: [] }
-  const lists = await hubListsOf(accessToken)
+  const lists = await listsFor(accessToken, onlyHub)
   const params = new URLSearchParams({ showCompleted: String(showCompleted), showHidden: 'true', maxResults: '100' })
   const out = []
   for (const l of lists) {
@@ -160,16 +167,20 @@ export async function listHubTasks({ showCompleted = false } = {}) {
       out.push(project(t, l))
     }
   }
-  return { ok: true, tasks: out }
+  return { ok: true, lists: lists.map((l) => l.title), tasks: out }
 }
 
-// Crea una tarea en la lista mapeada por categoría (para evitar un "move" del sync §6.1).
-export async function createHubTask({ title, description = '', meta = null, due = null, listName = null }) {
+// Compat: las tareas del hub del CEO.
+export function listHubTasks(opts = {}) { return listTasks({ ...opts, onlyHub: true }) }
+
+// Crea una tarea. En hub, mapea por categoría para evitar un "move" del sync (§6.1).
+export async function createHubTask({ subject = null, onlyHub = true, title, description = '', meta = null, due = null, listName = null }) {
   if (!googleSAEnabled()) return { ok: false, reason: 'not_configured' }
-  const accessToken = await token()
+  const accessToken = await token(subject)
   if (!accessToken) return { ok: false, reason: 'no_subject' }
-  const lists = await hubListsOf(accessToken)
-  const target = pickList(lists, listName || (meta && catToList(meta.cat)) || DEFAULT_LIST)
+  const lists = await listsFor(accessToken, onlyHub)
+  const wantName = listName || (onlyHub && meta ? catToList(meta.cat) : null)
+  const target = pickList(lists, wantName, onlyHub)
   if (!target) return { ok: false, reason: 'no_lists' }
 
   const notes = composeCreateNotes(description, meta)
@@ -182,9 +193,9 @@ export async function createHubTask({ title, description = '', meta = null, due 
 }
 
 // Completar (§6.3): status completed + fecha. El sync lo marca "Hecha" en el Sheet.
-export async function completeHubTask({ gid, listId, completedAt = new Date().toISOString() }) {
+export async function completeHubTask({ subject = null, gid, listId, completedAt = new Date().toISOString() }) {
   if (!googleSAEnabled()) return { ok: false, reason: 'not_configured' }
-  const accessToken = await token()
+  const accessToken = await token(subject)
   if (!accessToken) return { ok: false, reason: 'no_subject' }
   const j = await apiFetch(accessToken, `/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(gid)}`, {
     method: 'PATCH', body: { status: 'completed', completed: completedAt },
@@ -193,9 +204,9 @@ export async function completeHubTask({ gid, listId, completedAt = new Date().to
 }
 
 // Editar título/descripción/fecha PRESERVANDO la huella `· LADCC-XXXX` (§6.3).
-export async function patchHubTask({ gid, listId, title, description, due }) {
+export async function patchHubTask({ subject = null, gid, listId, title, description, due }) {
   if (!googleSAEnabled()) return { ok: false, reason: 'not_configured' }
-  const accessToken = await token()
+  const accessToken = await token(subject)
   if (!accessToken) return { ok: false, reason: 'no_subject' }
   const cur = await apiFetch(accessToken, `/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(gid)}`)
   const body = {}
