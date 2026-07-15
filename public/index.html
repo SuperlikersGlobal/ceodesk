@@ -166,6 +166,16 @@
   .kempty{color:var(--faint);font-size:12.5px;text-align:center;padding:12px 0}
   @media (max-width:900px){.kanban{grid-template-columns:1fr 1fr}}
   @media (max-width:600px){.kanban{grid-template-columns:1fr}}
+  /* Métricas */
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .mcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+  .mcard h3{font-size:13px;margin:0 0 14px;font-weight:700}
+  .mrow{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px}
+  .mrow__label{width:160px;flex-shrink:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mrow__bar{flex:1;background:var(--surface-2);border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border)}
+  .mrow__fill{height:100%;background:var(--brand);border-radius:6px;min-width:2px}
+  .mrow__val{width:32px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  @media (max-width:820px){.mgrid{grid-template-columns:1fr}.mrow__label{width:120px}}
   .menu-btn{display:none}
   @media (max-width:900px){.split{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.typegrid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
   @media (max-width:720px){
@@ -182,19 +192,19 @@
   "use strict";
   var API = '/api';
   var TOKEN_KEY = 'ceodesk_token';
-  var TYPE = { task:'Tarea', approve:'Aprobación', sign:'Firma', decide:'Decisión', read:'Lectura' };
-  var TYPE_ICON = { task:'📋', approve:'✅', sign:'✍️', decide:'⚖️', read:'👁' };
+  var TYPE = { task:'Tarea', bug:'Incidencia', approve:'Aprobación', sign:'Firma', decide:'Decisión', read:'Lectura' };
+  var TYPE_ICON = { task:'📋', bug:'🐞', approve:'✅', sign:'✍️', decide:'⚖️', read:'👁' };
   var DECISION_TYPES = ['approve','sign','decide'];
-  var STATUS = { pending:'Pendiente', in_review:'En revisión', info_requested:'Info solicitada', approved:'Aprobada', rejected:'Rechazada', signed:'Firmada', read:'Leída', todo:'Por hacer', doing:'En curso', done:'Hecha', blocked:'Bloqueada', cancelled:'Cancelada' };
-  var STATUS_TONE = { pending:'amber', in_review:'blue', info_requested:'amber', approved:'green', rejected:'red', signed:'green', read:'green', todo:'slate', doing:'blue', done:'green', blocked:'red', cancelled:'slate' };
+  var STATUS = { pending:'Pendiente', in_review:'En revisión', info_requested:'Info solicitada', approved:'Aprobada', rejected:'Rechazada', signed:'Firmada', read:'Leída', todo:'Por hacer', doing:'En curso', done:'Hecha', blocked:'Bloqueada', open:'Abierta', resolved:'Resuelta', closed:'Cerrada', cancelled:'Cancelada' };
+  var STATUS_TONE = { pending:'amber', in_review:'blue', info_requested:'amber', approved:'green', rejected:'red', signed:'green', read:'green', todo:'slate', doing:'blue', done:'green', blocked:'red', open:'amber', resolved:'blue', closed:'green', cancelled:'slate' };
   var PRIO = { low:'Baja', medium:'Media', high:'Alta', urgent:'Urgente' };
   var PRIO_COLOR = { low:'var(--slate)', medium:'var(--blue)', high:'var(--amber)', urgent:'var(--red)' };
-  var OPEN = ['pending','in_review','info_requested','todo','doing','blocked'];
-  var EVENT = { created:'creó el ítem', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', read:'marcó como leída', started:'empezó', completed:'completó', blocked:'bloqueó', resumed:'reanudó', cancelled:'canceló' };
-  var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
+  var OPEN = ['pending','in_review','info_requested','todo','doing','blocked','open','resolved'];
+  var EVENT = { created:'creó el ítem', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', read:'marcó como leída', started:'empezó', completed:'completó', blocked:'bloqueó', resumed:'reanudó', resolved:'resolvió', closed:'cerró', reopened:'reabrió', cancelled:'canceló' };
+  var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task' };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -307,6 +317,7 @@
     }
     nav += navItem('#/nueva','➕','Nueva solicitud', 0, route);
     nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route);
+    if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
     nav += navItem('#/historial','🗂️','Historial', 0, route);
 
     var view = renderRoute(route);
@@ -340,6 +351,7 @@
     if(route==='#/mis') return viewMine();
     if(route==='#/supervision') return viewSupervision();
     if(route==='#/tablero') return viewBoard();
+    if(route==='#/metricas') return viewMetrics();
     if(route==='#/historial') return viewHistory();
     return viewInbox(); // #/bandeja para todos
   }
@@ -424,8 +436,42 @@
       '<div class="toolbar">'+chips+'</div>'+list };
   }
 
-  // ---------- Tablero Kanban (solo tareas) ----------
-  var KCOLS=[['todo','Por hacer'],['doing','En curso'],['blocked','Bloqueada'],['done','Hecha']];
+  // ---------- Métricas ----------
+  function countBy(arr, fn){ var m={}; arr.forEach(function(x){ var k=fn(x)||'—'; m[k]=(m[k]||0)+1; }); return Object.keys(m).map(function(k){return [k,m[k]];}).sort(function(a,b){return b[1]-a[1];}); }
+  function barList(pairs){ if(!pairs.length) return '<p style="color:var(--muted);font-size:13px">Sin datos.</p>'; var max=1; pairs.forEach(function(p){ if(p[1]>max) max=p[1]; }); return pairs.map(function(p){ var w=Math.round(p[1]/max*100); return '<div class="mrow"><div class="mrow__label" title="'+esc(p[0])+'">'+esc(p[0])+'</div><div class="mrow__bar"><div class="mrow__fill" style="width:'+w+'%"></div></div><div class="mrow__val">'+p[1]+'</div></div>'; }).join(''); }
+  function viewMetrics(){
+    var reqs=state.requests;
+    var openItems=reqs.filter(function(r){return isOpen(r.status);});
+    var overdue=openItems.filter(function(r){return r.dueDate&&new Date(r.dueDate)<Date.now();});
+    var dec=reqs.filter(function(r){return r.decidedAt;});
+    var avg=dec.length?dec.reduce(function(s,r){return s+(new Date(r.decidedAt)-new Date(r.createdAt))/86400000;},0)/dec.length:0;
+    var withDue=dec.filter(function(r){return r.dueDate;});
+    var onTime=withDue.filter(function(r){return new Date(r.decidedAt)<=new Date(r.dueDate);});
+    var pct=withDue.length?Math.round(onTime.length/withDue.length*100):null;
+    var byPerson=countBy(openItems,function(r){return r.assigneeName||r.assigneeId;}).slice(0,10);
+    var byArea=countBy(openItems,function(r){return r.area||'Sin área';});
+    var byType=countBy(openItems,function(r){return TYPE[r.type]||r.type;});
+    var byStatus=countBy(openItems,function(r){return STATUS[r.status]||r.status;});
+    var stats='<div class="stats">'+
+      stat('Abiertos',openItems.length)+
+      stat('Vencidos',overdue.length,overdue.length?'danger':'')+
+      '<div class="stat"><div class="stat__label">Tiempo medio</div><div class="stat__value">'+avg.toFixed(1)+'<span style="font-size:15px;font-weight:600;color:var(--muted)"> d</span></div></div>'+
+      '<div class="stat"><div class="stat__label">Cumplimiento fecha</div><div class="stat__value">'+(pct===null?'—':pct+'%')+'</div></div>'+
+    '</div>';
+    var grid='<div class="mgrid">'+
+      '<div class="mcard"><h3>Carga por persona (abiertos)</h3>'+barList(byPerson)+'</div>'+
+      '<div class="mcard"><h3>Por área</h3>'+barList(byArea)+'</div>'+
+      '<div class="mcard"><h3>Por tipo</h3>'+barList(byType)+'</div>'+
+      '<div class="mcard"><h3>Por estado</h3>'+barList(byStatus)+'</div>'+
+    '</div>';
+    return { title:'Métricas', html:'<div class="phead"><h1>Métricas</h1><p>Panorama del trabajo que puedes ver: carga, áreas, tiempos y cumplimiento.</p></div>'+stats+grid };
+  }
+
+  // ---------- Tablero Kanban (Tareas / Incidencias) ----------
+  var BOARD_KINDS = {
+    task:{ label:'Tareas', type:'task', cols:[['todo','Por hacer'],['doing','En curso'],['blocked','Bloqueada'],['done','Hecha']] },
+    bug:{ label:'Incidencias', type:'bug', cols:[['open','Abierta'],['doing','En curso'],['resolved','Resuelta'],['closed','Cerrada']] }
+  };
   function boardCard(r){
     var mine=r.assigneeId===state.user.email;
     return '<div class="kcard" draggable="'+(mine?'true':'false')+'" data-id="'+r.id+'"'+
@@ -437,32 +483,42 @@
   }
   function viewBoard(){
     var me=state.user.email;
+    var kind=BOARD_KINDS[state.boardKind]?state.boardKind:'task';
+    var K=BOARD_KINDS[kind];
     var scope=state.boardScope||(state.user.sup?'all':'mine');
     var area=state.boardArea||'';
-    var tasks=state.requests.filter(function(r){return r.type==='task';});
-    if(scope==='mine') tasks=tasks.filter(function(r){return r.assigneeId===me;});
-    if(area) tasks=tasks.filter(function(r){return r.area===area;});
+    var items0=state.requests.filter(function(r){return r.type===K.type;});
+    if(scope==='mine') items0=items0.filter(function(r){return r.assigneeId===me;});
+    if(area) items0=items0.filter(function(r){return r.area===area;});
     var areaOpts='<option value="">Todas las áreas</option>'+((state.config&&state.config.areas)||[]).map(function(a){return '<option'+(a===area?' selected':'')+'>'+esc(a)+'</option>';}).join('');
-    var toolbar='<div class="toolbar">'+
-      '<button class="chip'+(scope==='mine'?' on':'')+'" onclick="CeoDesk.boardScope(\'mine\')">Mías</button>'+
-      (state.user.sup?'<button class="chip'+(scope==='all'?' on':'')+'" onclick="CeoDesk.boardScope(\'all\')">Las que veo</button>':'')+
+    var kindChips=Object.keys(BOARD_KINDS).map(function(k){return '<button class="chip'+(k===kind?' on':'')+'" onclick="CeoDesk.boardKind(\''+k+'\')">'+BOARD_KINDS[k].label+'</button>';}).join('');
+    var toolbar='<div class="toolbar">'+kindChips+
+      '<span style="width:12px"></span>'+
+      '<button class="chip'+(scope==='mine'?' on':'')+'" onclick="CeoDesk.boardScope(\'mine\')">Míos</button>'+
+      (state.user.sup?'<button class="chip'+(scope==='all'?' on':'')+'" onclick="CeoDesk.boardScope(\'all\')">Los que veo</button>':'')+
       '<select class="sel" style="width:auto;margin-left:auto" onchange="CeoDesk.boardArea(this.value)">'+areaOpts+'</select>'+
     '</div>';
-    var board='<div class="kanban">'+KCOLS.map(function(c){
-      var items=tasks.filter(function(r){return r.status===c[0];});
+    var board='<div class="kanban">'+K.cols.map(function(c){
+      var items=items0.filter(function(r){return r.status===c[0];});
       var cards=items.map(boardCard).join('');
       return '<div class="kcol" data-status="'+c[0]+'" ondragover="CeoDesk.dragOver(event,this)" ondragleave="CeoDesk.dragLeave(this)" ondrop="CeoDesk.drop(event,\''+c[0]+'\',this)">'+
         '<div class="kcol__head">'+c[1]+' <span class="kcount">'+items.length+'</span></div>'+
         '<div class="kcol__body">'+(cards||'<div class="kempty">—</div>')+'</div></div>';
     }).join('')+'</div>';
-    return { title:'Tablero', html:'<div class="phead"><h1>Tablero</h1><p>Tareas por estado. Arrastra una tarjeta para moverla (solo si es tuya).</p></div>'+toolbar+board };
+    return { title:'Tablero', html:'<div class="phead"><h1>Tablero</h1><p>'+(kind==='bug'?'Incidencias':'Tareas')+' por estado. Arrastra una tarjeta para moverla (solo si es tuya).</p></div>'+toolbar+board };
   }
   var DRAG={id:null,from:null};
-  function colAction(from,to){
+  function colAction(kind,from,to){
     if(from===to) return null;
-    if(to==='doing'){ if(from==='todo') return 'start'; if(from==='blocked') return 'resume'; }
-    if(to==='done'){ if(from==='doing') return 'complete'; }
-    if(to==='blocked'){ if(from==='todo'||from==='doing') return 'block'; }
+    if(kind==='task'){
+      if(to==='doing'){ if(from==='todo') return 'start'; if(from==='blocked') return 'resume'; }
+      if(to==='done' && from==='doing') return 'complete';
+      if(to==='blocked' && (from==='todo'||from==='doing')) return 'block';
+    } else {
+      if(to==='doing'){ if(from==='open') return 'start'; if(from==='blocked') return 'resume'; }
+      if(to==='resolved' && from==='doing') return 'resolve';
+      if(to==='blocked' && (from==='open'||from==='doing')) return 'block';
+    }
     return null;
   }
   function dragStart(e,id){ DRAG.id=id; var r=findReq(id); DRAG.from=r?r.status:null; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';} }
@@ -471,7 +527,7 @@
   function drop(e,toStatus,col){ e.preventDefault(); if(col) col.classList.remove('over');
     var id=DRAG.id, from=DRAG.from; DRAG.id=null; DRAG.from=null;
     if(!id) return;
-    var action=colAction(from,toStatus);
+    var action=colAction(BOARD_KINDS[state.boardKind]?state.boardKind:'task', from, toStatus);
     if(!action){ toast('Ese movimiento no está permitido.'); return; }
     act(id, action);
   }
@@ -521,6 +577,10 @@
         if(r.status==='todo') A=[['start','Empezar','btn--primary'],['block','Bloquear','btn--red']];
         else if(r.status==='doing') A=[['complete','Marcar hecha','btn--green'],['block','Bloquear','btn--red']];
         else if(r.status==='blocked') A=[['resume','Reanudar','btn--primary']];
+      } else if(r.type==='bug'){
+        if(r.status==='open') A=[['start','Empezar','btn--primary'],['block','Bloquear','btn--red']];
+        else if(r.status==='doing') A=[['resolve','Marcar resuelta','btn--green'],['block','Bloquear','btn--red']];
+        else if(r.status==='blocked') A=[['resume','Reanudar','btn--primary']];
       } else if(r.type==='read'){
         A=[['mark_read','Marcar leída','btn--green']];
       } else if(r.type==='sign'){
@@ -528,9 +588,21 @@
       } else {
         A=[['approve','Aprobar','btn--green'],['request_info','Pedir más información','btn--primary'],['reject','Rechazar','btn--red']];
       }
-      var heading=(r.type==='task'||r.type==='read')?'Acciones':'Tu decisión';
-      var btns=A.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
-      actions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">'+heading+'</h3><div class="actionbar">'+btns+'</div></div>';
+      if(A.length){
+        var heading=(DECISION_TYPES.indexOf(r.type)>=0)?'Tu decisión':'Acciones';
+        var btns=A.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
+        actions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">'+heading+'</h3><div class="actionbar">'+btns+'</div></div>';
+      }
+    }
+    var reqActions='';
+    if(isRequester && r.type==='bug'){
+      var RA=[];
+      if(r.status==='resolved') RA=[['close','Cerrar (verificado)','btn--green'],['reopen','Reabrir','btn--red']];
+      else if(r.status==='closed') RA=[['reopen','Reabrir','btn--primary']];
+      if(RA.length){
+        var rb=RA.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
+        reqActions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Tu incidencia</h3><div class="actionbar">'+rb+'</div></div>';
+      }
     }
     // respuesta del solicitante cuando se pidió info
     var respond='';
@@ -569,7 +641,7 @@
           (r.recommendation?'<div class="dblock"><h3>Recomendación de quien solicita</h3><p>'+esc(r.recommendation)+'</p></div>':'')+
           (r.impact?'<div class="dblock"><h3>Impacto y urgencia</h3><p>'+esc(r.impact)+'</p></div>':'')+
           doc+decision+
-        '</div>'+actions+respond+commentCard+
+        '</div>'+actions+reqActions+respond+commentCard+
       '</div><div>'+
         '<div class="card" style="padding:18px">'+
           kv('Solicita', avatar(r.requesterName,24)+' '+esc(r.requesterName), true)+
@@ -632,8 +704,10 @@
     sign:{ title:'Firmar', sub:'Se registrará tu firma sobre el documento con sello de tiempo.', cta:'Firmar', cls:'btn--green' },
     reject:{ title:'Rechazar', sub:'Explica el motivo para que quede claro el porqué.', cta:'Rechazar', cls:'btn--red', requireNote:true },
     request_info:{ title:'Pedir más información', sub:'Vuelve a quien lo pidió con tu pregunta.', cta:'Enviar pregunta', cls:'btn--primary', requireNote:true },
-    block:{ title:'Bloquear tarea', sub:'Explica qué la bloquea.', cta:'Bloquear', cls:'btn--red', requireNote:true },
-    start:{ direct:true }, complete:{ direct:true }, resume:{ direct:true }, mark_read:{ direct:true }
+    block:{ title:'Bloquear', sub:'Explica qué lo bloquea.', cta:'Bloquear', cls:'btn--red', requireNote:true },
+    resolve:{ title:'Marcar resuelta', sub:'Describe brevemente cómo se resolvió.', cta:'Resolver', cls:'btn--green' },
+    start:{ direct:true }, complete:{ direct:true }, resume:{ direct:true }, mark_read:{ direct:true },
+    close:{ direct:true }, reopen:{ direct:true }
   };
   function act(id, action){
     var m=ACT_META[action]||{}; var r=findReq(id);
@@ -686,7 +760,7 @@
 
   // expose
   window.CeoDesk = { logout:logout, setFilter:function(f){state.listFilter=f;render();}, setHist:function(f){state.histFilter=f;render();},
-    boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();},
+    boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();}, boardKind:function(v){state.boardKind=v;render();},
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu };
 

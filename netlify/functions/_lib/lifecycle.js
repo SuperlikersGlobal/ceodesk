@@ -7,11 +7,11 @@
 //   task                -> tarea (Por hacer -> En curso -> Hecha / Bloqueada)
 import { randomUUID } from 'node:crypto'
 
-export const REQUEST_TYPES = ['read', 'approve', 'sign', 'decide', 'task']
+export const REQUEST_TYPES = ['read', 'approve', 'sign', 'decide', 'task', 'bug']
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent']
 
 // Estados en los que el ítem sigue abierto (esperando acción).
-export const OPEN_STATUSES = ['pending', 'in_review', 'info_requested', 'todo', 'doing', 'blocked']
+export const OPEN_STATUSES = ['pending', 'in_review', 'info_requested', 'todo', 'doing', 'blocked', 'open', 'resolved']
 
 // Tipos que exigen "debido proceso" (contexto + recomendación + impacto).
 export const DECISION_TYPES = ['approve', 'sign', 'decide']
@@ -29,6 +29,9 @@ const ACTION_STATUS = {
   complete: 'done',
   block: 'blocked',
   resume: 'doing',
+  resolve: 'resolved',
+  close: 'closed',
+  reopen: 'open',
   cancel: 'cancelled',
   comment: null, // no cambia el estado
 }
@@ -45,26 +48,30 @@ const ACTION_EVENT = {
   complete: 'completed',
   block: 'blocked',
   resume: 'resumed',
+  resolve: 'resolved',
+  close: 'closed',
+  reopen: 'reopened',
   cancel: 'cancelled',
   comment: 'commented',
 }
 
-// Acciones del destinatario, por tipo de ítem. El solicitante siempre puede
-// provide_info/cancel y cualquiera con acceso puede comentar.
-export const ACTIONS_BY_TYPE = {
-  approve: ['approve', 'reject', 'request_info'],
-  sign: ['sign', 'reject', 'request_info'],
-  decide: ['approve', 'reject', 'request_info'],
-  read: ['mark_read'],
-  task: ['start', 'complete', 'block', 'resume'],
+// Acciones por tipo de ítem, separadas por quién puede tomarlas.
+// El solicitante siempre puede provide_info/cancel; cualquiera con acceso comenta.
+const BY_TYPE = {
+  approve: { assignee: ['approve', 'reject', 'request_info'], requester: [] },
+  sign: { assignee: ['sign', 'reject', 'request_info'], requester: [] },
+  decide: { assignee: ['approve', 'reject', 'request_info'], requester: [] },
+  read: { assignee: ['mark_read'], requester: [] },
+  task: { assignee: ['start', 'complete', 'block', 'resume'], requester: [] },
+  bug: { assignee: ['start', 'resolve', 'block', 'resume'], requester: ['close', 'reopen'] },
 }
 const UNIVERSAL_ACTIONS = ['provide_info', 'cancel', 'comment']
 
-// Todas las acciones que puede tomar el destinatario (para el control de acceso).
-export const ASSIGNEE_ACTIONS = Array.from(new Set(Object.values(ACTIONS_BY_TYPE).flat()))
-export const REQUESTER_ACTIONS = ['provide_info', 'cancel']
+// Todas las acciones del destinatario / del solicitante (para el control de acceso).
+export const ASSIGNEE_ACTIONS = Array.from(new Set(Object.values(BY_TYPE).flatMap((t) => t.assignee)))
+export const REQUESTER_ACTIONS = Array.from(new Set(['provide_info', 'cancel', ...Object.values(BY_TYPE).flatMap((t) => t.requester)]))
 // Acciones que registran un desenlace (auditoría: quién y cuándo).
-const RESOLUTION_ACTIONS = ['approve', 'reject', 'sign', 'complete', 'mark_read']
+const RESOLUTION_ACTIONS = ['approve', 'reject', 'sign', 'complete', 'mark_read', 'resolve', 'close']
 
 export function isOpen(status) {
   return OPEN_STATUSES.includes(status)
@@ -77,12 +84,16 @@ export function isValidAction(action) {
 // ¿La acción aplica a un ítem de este tipo?
 export function isActionAllowedForType(action, type) {
   if (UNIVERSAL_ACTIONS.includes(action)) return true
-  return (ACTIONS_BY_TYPE[type] || []).includes(action)
+  const t = BY_TYPE[type]
+  if (!t) return false
+  return t.assignee.includes(action) || t.requester.includes(action)
 }
 
 // Estado inicial según el tipo.
 export function initialStatus(type) {
-  return type === 'task' ? 'todo' : 'pending'
+  if (type === 'task') return 'todo'
+  if (type === 'bug') return 'open'
+  return 'pending'
 }
 
 // Crea el ítem inicial (con evento 'created'). `input` ya viene validado.

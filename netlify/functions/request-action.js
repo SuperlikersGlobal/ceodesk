@@ -41,9 +41,9 @@ export default async (req) => {
     return json({ error: 'No puedes comentar esta solicitud' }, 403)
   }
 
-  // No re-decidir una solicitud ya cerrada
-  if (!isOpen(request.status) && action !== 'comment') {
-    return json({ error: 'Esta solicitud ya está cerrada' }, 409)
+  // No re-decidir un ítem ya cerrado (salvo comentar o reabrir).
+  if (!isOpen(request.status) && action !== 'comment' && action !== 'reopen') {
+    return json({ error: 'Este ítem ya está cerrado' }, 409)
   }
 
   const actor = { email: u.u, name: u.name }

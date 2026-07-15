@@ -115,6 +115,21 @@ test('tipo Tarea: sin debido proceso; ciclo por-hacer -> en curso -> hecha', asy
   assert.equal(done.decidedByName, 'Carlos')
 })
 
+test('tipo Incidencia/Bug: abierta -> en curso -> resuelta -> cerrada (por el reportante)', async () => {
+  const r = (await (await requests(req('POST', '/api/requests', ana, { type: 'bug', title: 'Falla en login', context: 'no carga', assigneeId: 'carlos@iwin.im' }))).json()).request
+  assert.equal(r.status, 'open')
+  assert.equal((await (await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'start' }))).json()).request.status, 'doing')
+  assert.equal((await (await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'resolve', note: 'corregido' }))).json()).request.status, 'resolved')
+  // el destinatario NO puede cerrar (eso lo hace quien reportó)
+  assert.equal((await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'close' }))).status, 403)
+  // la reportante cierra
+  assert.equal((await (await requestAction(req('POST', '/api/request-action', ana, { id: r.id, action: 'close' }))).json()).request.status, 'closed')
+  // y puede reabrir aunque esté cerrada
+  assert.equal((await (await requestAction(req('POST', '/api/request-action', ana, { id: r.id, action: 'reopen' }))).json()).request.status, 'open')
+  // 'approve' no aplica a un bug
+  assert.equal((await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'approve' }))).status, 400)
+})
+
 test('la decisión sigue exigiendo recomendación e impacto', async () => {
   assert.equal((await requests(req('POST', '/api/requests', ana, { type: 'approve', title: 'X', context: 'c', assigneeId: 'carlos@iwin.im' }))).status, 400)
 })
