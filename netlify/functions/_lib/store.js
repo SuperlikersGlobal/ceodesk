@@ -56,6 +56,22 @@ export async function saveGtaskOverlay(gid, patch) {
   return next
 }
 
+// Tokens OAuth de Jira por usuario. key = email -> { accessToken, refreshToken,
+// expiresAt, cloudId, siteUrl, siteName, connectedAt }.
+export const jiraStore = () => store('ceodesk-jira')
+export async function getJira(email) {
+  return jiraStore().get(String(email || '').toLowerCase(), { type: 'json' })
+}
+export async function saveJira(email, patch) {
+  const s = jiraStore(); const key = String(email || '').toLowerCase()
+  const next = { ...((await s.get(key, { type: 'json' })) || {}), ...patch }
+  await s.setJSON(key, next)
+  return next
+}
+export async function deleteJira(email) {
+  await jiraStore().delete(String(email || '').toLowerCase())
+}
+
 // Preferencias por usuario (p. ej. si un líder conectó Google Tasks). key = email.
 export const prefsStore = () => store('ceodesk-prefs')
 

@@ -224,7 +224,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[] };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -259,6 +259,9 @@
   // ---------- auth ----------
   function boot(){
     state.token = sessionStorage.getItem(TOKEN_KEY);
+    // Vuelta del OAuth de Jira: ?jira=connected|error|nosite. Limpia la URL.
+    try{ var qp=new URLSearchParams(location.search); state.jiraFlash=qp.get('jira');
+      if(state.jiraFlash) history.replaceState(null,'',location.pathname+location.hash); }catch(e){}
     api('/config').then(function(cfg){
       state.config = cfg;
       if(state.token){ loadAndStart(); } else { showLogin(); }
@@ -267,10 +270,13 @@
   function loadAndStart(){
     // deriva el usuario desde el token (payload firmado) antes de cargar
     state.user = decodeUser(state.token);
-    Promise.all([loadRequests(), loadRoster(), loadGtasks()]).then(function(){
+    Promise.all([loadRequests(), loadRoster(), loadGtasks(), loadJira()]).then(function(){
       state.loaded = true;
       if(!location.hash) location.hash = '#/bandeja';
       render();
+      if(state.jiraFlash==='error'){ alert('No se pudo conectar Jira. Intenta de nuevo.'); }
+      else if(state.jiraFlash==='nosite'){ alert('No encontramos un sitio de Jira para tu cuenta.'); }
+      state.jiraFlash=null;
     }).catch(function(e){ showLogin(e.message); });
   }
   function decodeUser(token){
@@ -291,6 +297,13 @@
       state.gtasksEnabled=!!d.enabled; state.gtasksConnected=!!d.connected;
       state.gtasksMode=d.mode||''; state.gtasksLists=d.lists||[]; state.gtasks=d.tasks||[];
     }).catch(function(){ state.gtasks=[]; state.gtasksEnabled=false; state.gtasksConnected=false; });
+  }
+  // Jira (espejo vivo): cada usuario ve sus issues asignados (opt-in por persona).
+  function loadJira(){
+    if(!state.user){ state.jiraEnabled=false; state.jiraConnected=false; state.jira=[]; return Promise.resolve(); }
+    return api('/jira').then(function(d){
+      state.jiraEnabled=!!d.enabled; state.jiraConnected=!!d.connected; state.jira=d.issues||[]; state.jiraSite=d.site||'';
+    }).catch(function(){ state.jiraEnabled=false; state.jiraConnected=false; state.jira=[]; });
   }
 
   function showLogin(msg){
@@ -456,6 +469,38 @@
       ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">'+sub+'</span>'+disconnect+'</div>'+add+list;
   }
 
+  // ---- Jira (espejo vivo, lectura) ----
+  function jiraCard(it){
+    var st = GT_STATUS[it.status] || GT_STATUS.todo;
+    var due = it.due?'<span class="due '+dueInfo(it.due).tone+'">'+esc(dueInfo(it.due).label)+'</span>':'';
+    var meta = '<span class="badge b-brand">'+esc(it.key)+'</span>';
+    if(it.jiraStatus) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(it.jiraStatus)+'</span>';
+    if(it.type) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(it.type)+'</span>';
+    var act = it.url?'<a class="btn" href="'+esc(it.url)+'" target="_blank" rel="noopener">Abrir en Jira ↗</a>':'';
+    return '<div class="gt-card">'+
+      '<div class="gt-main"><div class="gt-title">'+esc(it.summary)+'</div>'+
+        '<div class="gt-meta"><span class="badge '+st[1]+' bdot">'+st[0]+'</span>'+meta+(due?due:'')+'</div></div>'+
+      '<div class="gt-act">'+act+'</div></div>';
+  }
+  function jiraSection(){
+    if(!state.jiraEnabled) return '';
+    if(!state.jiraConnected){
+      return '<div class="rowlbl" style="margin-top:26px">Jira '+
+        '<span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— importa tus tareas asignadas en Jira</span></div>'+
+        '<div class="gt-add" style="justify-content:space-between">'+
+          '<span style="color:var(--muted);font-size:13px">Conecta tu cuenta de Jira para ver aquí tus issues asignados, siempre al día.</span>'+
+          '<button class="btn btn--primary" onclick="CeoDesk.jiraConnect()"'+(state.jiraBusy?' disabled':'')+'>🔗 Conectar Jira</button>'+
+        '</div>';
+    }
+    var open = state.jira;
+    var list = open.length ? '<div class="rows">'+open.map(jiraCard).join('')+'</div>'
+      : '<p style="color:var(--muted);font-size:13px">No tienes issues abiertos asignados en Jira.</p>';
+    var site = state.jiraSite?' · '+esc(state.jiraSite):'';
+    return '<div class="rowlbl" style="margin-top:26px">Jira · '+open.length+
+      ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— tus issues asignados'+site+'</span>'+
+      ' <a class="link" style="font-size:12px;font-weight:600;cursor:pointer" onclick="CeoDesk.jiraDisconnect()">Desconectar</a></div>'+list;
+  }
+
   function viewInbox(){
     var me = state.user.email;
     var open = state.requests.filter(function(r){return r.assigneeId===me && isOpen(r.status);}).sort(function(a,b){
@@ -475,7 +520,7 @@
     return { title:'Mi trabajo', html:
       '<div class="phead"><h1>Mi trabajo</h1><p>Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
-      '<div class="toolbar">'+chips+'</div>'+list+gtSection() };
+      '<div class="toolbar">'+chips+'</div>'+list+gtSection()+jiraSection() };
   }
   function stat(label,val,cls){ return '<div class="stat"><div class="stat__label">'+label+'</div><div class="stat__value '+(cls||'')+'">'+val+'</div></div>'; }
 
@@ -921,6 +966,23 @@
       .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
   }
 
+  // ---- acciones Jira ----
+  function jiraConnect(){
+    if(state.jiraBusy) return; state.jiraBusy=true; render();
+    api('/jira-connect').then(function(d){
+      if(d.url){ window.location.href=d.url; } else { state.jiraBusy=false; render(); }
+    }).catch(function(e){ state.jiraBusy=false; alert(e.message); render(); });
+  }
+  function jiraDisconnect(){
+    if(state.jiraBusy) return;
+    if(!confirm('¿Desconectar Jira? Dejarás de ver tus issues aquí (no se modifica nada en Jira).')) return;
+    state.jiraBusy=true;
+    api('/jira',{method:'POST',body:{op:'disconnect'}})
+      .then(function(){ return loadJira(); })
+      .then(function(){ state.jiraBusy=false; render(); })
+      .catch(function(e){ state.jiraBusy=false; alert(e.message); render(); });
+  }
+
   function toggleMenu(){ var s=document.getElementById('side'); if(s) s.classList.toggle('open'); }
   function closeMenu(){ var s=document.getElementById('side'); if(s) s.classList.remove('open'); }
 
@@ -932,7 +994,8 @@
     delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
-    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect };
+    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect,
+    jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect };
 
   window.addEventListener('hashchange', function(){ if(state.user) render(); });
   boot();

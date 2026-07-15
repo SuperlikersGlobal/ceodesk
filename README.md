@@ -39,6 +39,11 @@ Producción: **https://ceodesk.superlikers.com**
   resolución, cumplimiento de fecha, y carga por persona/área/tipo/estado.
 - **Auditoría** completa por ítem (quién hizo qué y cuándo) y **registro interno
   de firma** (quién firmó, cuándo, sobre qué versión).
+- **Jira (espejo vivo, por usuario):** cualquier miembro puede **Conectar Jira**
+  ("Conéctate con Atlassian", OAuth 2.0 3LO) y ver en "Mi trabajo" sus **issues
+  asignados**, siempre al día (estado y datos reflejados desde Jira, con enlace al
+  issue). Cada quien autoriza su propia cuenta; los tokens se guardan y refrescan
+  por usuario.
 - **Google Tasks como hub** (solo el CEO): "Mi trabajo" unifica los ítems nativos
   con las **6 listas de Google Tasks** de Luis (Superlikers · LADCC · DCDG · LIH ·
   La Isabella · DCC). Captura rápida, cambio de estado (En curso / Bloqueada,
@@ -76,11 +81,15 @@ netlify/functions/
   roster.js                       GET  /api/roster           (personas para elegir destinatario)
   requests.js                     GET/POST /api/requests      (listar según visibilidad / crear)
   request-action.js               POST /api/request-action    (acciones sobre un ítem)
-  google-tasks.js                 GET/POST /api/google-tasks  (hub Google Tasks del CEO)
+  google-tasks.js                 GET/POST /api/google-tasks  (Google Tasks: hub CEO / propio líder)
+  jira-connect.js                 GET  /api/jira-connect      (URL de autorización OAuth de Jira)
+  jira-callback.js                GET  /api/jira-callback     (fin del OAuth: guarda tokens del usuario)
+  jira.js                         GET/POST /api/jira          (espejo vivo de issues / desconectar)
   _lib/auth.js                    tokens HMAC + helpers
   _lib/google.js                  verificación del ID token de Google
   _lib/google-auth.js             cuenta de servicio + delegación de dominio (access token)
   _lib/google-tasks.js            integración Google Tasks (formato notes, huella, · meta)
+  _lib/jira.js                    integración Jira (OAuth 3LO, mapeo de estados, proyección)
   _lib/store.js                   Netlify Blobs (con fallback en memoria para tests)
   _lib/users.js                   alta por Google, roles, Chief of Staff, visibilidad
   _lib/org.js                     organigrama (ancestros, roster) desde la variable ORG
@@ -106,6 +115,9 @@ netlify.toml                      publish=public, /api/* -> funciones, SPA fallb
 | `GOOGLE_SA_CLIENT_EMAIL` | (Opcional) Cuenta de servicio para Google Tasks. Se puede reutilizar la del CRM. |
 | `GOOGLE_SA_PRIVATE_KEY` | (Opcional) Clave privada de la cuenta de servicio (con `\n` escapados). **Secreto.** |
 | `GOOGLE_TASKS_IMPERSONATE` | (Opcional) Cuenta de Workspace a impersonar (dueña del hub). Por defecto, el 1er CEO. |
+| `JIRA_OAUTH_CLIENT_ID` | (Opcional) Client ID de la app OAuth 2.0 (3LO) registrada en `developer.atlassian.com`. |
+| `JIRA_OAUTH_CLIENT_SECRET` | (Opcional) Secret de la app OAuth de Jira. **Secreto.** |
+| `APP_BASE_URL` | (Opcional) Base pública para el `redirect_uri` de Jira. Por defecto `https://ceodesk.superlikers.com`. |
 
 En Google Cloud, autoriza `https://ceodesk.superlikers.com` (y `https://ceodesk.netlify.app`) como *Authorized JavaScript origins* del Client ID.
 
@@ -139,6 +151,29 @@ Puntos clave de la implementación (no cambiar sin actualizar el contrato):
 - **Completar** = `status: completed`. Borrado: **no** se borra, solo se completa
   (evita que LADCC lo trate como "salió del filtro").
 
+## Integración con Jira (espejo vivo por usuario)
+
+Cada persona conecta **su propio** Jira con **OAuth 2.0 (3LO)** — el botón
+"Conéctate con Atlassian". CeoDesk guarda su access/refresh token por usuario y
+**refleja los issues asignados** (`assignee = currentUser()` abiertos) en "Mi
+trabajo", con enlace directo al issue. Es lectura (Jira → CeoDesk); escribir de
+vuelta a Jira queda para más adelante.
+
+Puesta en marcha (una sola vez, quien administra):
+
+1. En `https://developer.atlassian.com/console/myapps/` crea una **OAuth 2.0
+   (3LO) integration**, tipo de acceso **Resource-level**.
+2. **Permissions → Jira API**, con scopes `read:jira-work`, `read:jira-user`
+   (opcional `write:jira-work` para el futuro). `offline_access` **no** se agrega
+   aquí: va en el `scope` de la URL de autorización (lo pone el backend).
+3. **Authorization → OAuth 2.0 (3LO)**, callback: `https://ceodesk.superlikers.com/api/jira-callback`.
+4. Copia el **Client ID** y el **Secret** a las variables `JIRA_OAUTH_CLIENT_ID`
+   y `JIRA_OAUTH_CLIENT_SECRET` (esta última, secreta) en Netlify.
+
+El `state` del flujo va **firmado** (HMAC con `AUTH_SECRET`) y ata la autorización
+al usuario. Los **rotating refresh tokens** se guardan en cada renovación, así el
+espejo sigue vivo sin reconexiones. Los tokens viven en el store `ceodesk-jira`.
+
 ## Desarrollo local
 
 ```bash
@@ -159,11 +194,14 @@ Ejercita los ciclos de tarea, incidencia y decisión, la visibilidad por
 organigrama, el Chief of Staff, la privacidad entre pares y las etiquetas,
 usando un almacén en memoria (sin tocar Blobs real). También valida los helpers
 del contrato Google Tasks (huella `· LADCC-XXXX`, marcador `· meta`, limpieza de
-la descripción) sin tocar la red.
+la descripción) y los mapeos de Jira (estado/prioridad, proyección de issues,
+URL de autorización y `state` firmado), todo sin tocar la red.
 
 ## Roadmap
 
-- **Importar de Jira** — traer los issues abiertos para migrar de verdad
-  (reutilizando la integración de Jira que ya existe en el CRM). *Pendiente.*
+- **Jira bidireccional** — cambiar el estado del issue *desde* CeoDesk (hoy el
+  espejo es de lectura Jira → CeoDesk). Requiere transiciones por workflow.
+- **Sincronización programada de Jira** — refrescar el espejo en segundo plano
+  (hoy se refresca al abrir "Mi trabajo").
 - Recordatorios automáticos por SLA · ingesta desde Gmail · firma electrónica
   con validez legal · más métricas (tiempo por estado, cuellos de botella).
