@@ -3,7 +3,7 @@
 // POST /api/requests         -> crea una solicitud para un destinatario
 import { authUser, json } from './_lib/auth.js'
 import { listRequests, getRequest, saveRequest, nextCode } from './_lib/store.js'
-import { buildRequest, REQUEST_TYPES, PRIORITIES } from './_lib/lifecycle.js'
+import { buildRequest, REQUEST_TYPES, PRIORITIES, isDecisionType } from './_lib/lifecycle.js'
 import { canViewRequest, defaultAssignee } from './_lib/users.js'
 import { nameFor } from './_lib/org.js'
 
@@ -46,9 +46,12 @@ export default async (req) => {
     if (!REQUEST_TYPES.includes(body.type)) errors.push('el tipo')
     if (!assigneeEmail) errors.push('el destinatario')
     else if (!assigneeName) errors.push('un destinatario válido')
-    if (!body.context || !body.context.trim()) errors.push('el contexto')
-    if (!body.recommendation || !body.recommendation.trim()) errors.push('la recomendación')
-    if (!body.impact || !body.impact.trim()) errors.push('el impacto')
+    if (!body.context || !body.context.trim()) errors.push('la descripción')
+    // El "debido proceso" (recomendación + impacto) solo se exige en decisiones.
+    if (isDecisionType(body.type)) {
+      if (!body.recommendation || !body.recommendation.trim()) errors.push('la recomendación')
+      if (!body.impact || !body.impact.trim()) errors.push('el impacto')
+    }
     if (errors.length) {
       return json({ error: 'Faltan campos obligatorios: ' + errors.join(', ') + '.' }, 400)
     }
@@ -57,9 +60,10 @@ export default async (req) => {
       title: body.title.trim(),
       type: body.type,
       priority: PRIORITIES.includes(body.priority) ? body.priority : 'medium',
+      area: (body.area || '').trim() || null,
       context: body.context.trim(),
-      recommendation: body.recommendation.trim(),
-      impact: body.impact.trim(),
+      recommendation: (body.recommendation || '').trim() || null,
+      impact: (body.impact || '').trim() || null,
       documentName: (body.documentName || '').trim() || null,
       documentUrl: (body.documentUrl || '').trim() || null,
       documentVersion: (body.documentVersion || '').trim() || null,

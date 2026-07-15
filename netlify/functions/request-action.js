@@ -5,7 +5,7 @@
 //   - Destinatario o solicitante: comment
 import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
-import { applyAction, isOpen, isValidAction, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
+import { applyAction, isOpen, isValidAction, isActionAllowedForType, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
 import { canViewRequest, assigneeOf, emailOf } from './_lib/users.js'
 
 export default async (req) => {
@@ -21,6 +21,10 @@ export default async (req) => {
   const request = await getRequest(id)
   // 404 si no existe o el usuario no puede siquiera verla (no filtra existencia).
   if (!request || !canViewRequest(u, request)) return json({ error: 'Solicitud no encontrada' }, 404)
+
+  if (!isActionAllowedForType(action, request.type)) {
+    return json({ error: 'Esa acción no aplica a este tipo de ítem' }, 400)
+  }
 
   const me = emailOf(u)
   const isAssignee = assigneeOf(request) === me

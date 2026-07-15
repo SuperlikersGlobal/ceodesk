@@ -102,6 +102,23 @@ test('Chief of Staff ve todo lo asignado al CEO', async () => {
   assert.ok(!has(await list(angela), r.id))
 })
 
+test('tipo Tarea: sin debido proceso; ciclo por-hacer -> en curso -> hecha', async () => {
+  const r = (await (await requests(req('POST', '/api/requests', ana, { type: 'task', title: 'Diseñar banner', context: 'detalle', assigneeId: 'carlos@iwin.im' }))).json()).request
+  assert.equal(r.status, 'todo')
+  // 'approve' no aplica a una tarea
+  assert.equal((await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'approve' }))).status, 400)
+  // solo el destinatario la mueve
+  assert.equal((await requestAction(req('POST', '/api/request-action', ana, { id: r.id, action: 'start' }))).status, 403)
+  assert.equal((await (await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'start' }))).json()).request.status, 'doing')
+  const done = (await (await requestAction(req('POST', '/api/request-action', carlos, { id: r.id, action: 'complete', note: 'listo' }))).json()).request
+  assert.equal(done.status, 'done')
+  assert.equal(done.decidedByName, 'Carlos')
+})
+
+test('la decisión sigue exigiendo recomendación e impacto', async () => {
+  assert.equal((await requests(req('POST', '/api/requests', ana, { type: 'approve', title: 'X', context: 'c', assigneeId: 'carlos@iwin.im' }))).status, 400)
+})
+
 test('privacidad entre pares: sin relación, no se ve', async () => {
   const r = await create(carlos, 'ana@iwin.im') // Carlos -> Ana
   assert.ok(!has(await list(santiago), r.id), 'Santiago no ve lo de Carlos->Ana')

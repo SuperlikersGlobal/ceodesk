@@ -117,7 +117,7 @@
   .inp,.ta,.sel{width:100%;border:1px solid var(--border-strong);border-radius:9px;padding:10px 12px;font-size:13.5px;font-family:inherit;background:var(--surface);color:var(--ink)}
   .ta{min-height:78px;resize:vertical} .inp:focus,.ta:focus,.sel:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .typegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .typegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
   .topt{border:1.5px solid var(--border-strong);border-radius:10px;padding:12px 6px;text-align:center;font-weight:650;font-size:12.5px;color:var(--muted);background:var(--surface)}
   .topt.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-ink)}
   .topt .ti{display:block;font-size:20px;margin-bottom:3px}
@@ -166,15 +166,16 @@
   "use strict";
   var API = '/api';
   var TOKEN_KEY = 'ceodesk_token';
-  var TYPE = { read:'Lectura', approve:'Aprobación', sign:'Firma', decide:'Decisión' };
-  var TYPE_ICON = { read:'👁', approve:'✅', sign:'✍️', decide:'⚖️' };
-  var STATUS = { pending:'Pendiente', in_review:'En revisión', info_requested:'Info solicitada', approved:'Aprobada', rejected:'Rechazada', signed:'Firmada', cancelled:'Cancelada' };
-  var STATUS_TONE = { pending:'amber', in_review:'blue', info_requested:'amber', approved:'green', rejected:'red', signed:'green', cancelled:'slate' };
+  var TYPE = { task:'Tarea', approve:'Aprobación', sign:'Firma', decide:'Decisión', read:'Lectura' };
+  var TYPE_ICON = { task:'📋', approve:'✅', sign:'✍️', decide:'⚖️', read:'👁' };
+  var DECISION_TYPES = ['approve','sign','decide'];
+  var STATUS = { pending:'Pendiente', in_review:'En revisión', info_requested:'Info solicitada', approved:'Aprobada', rejected:'Rechazada', signed:'Firmada', read:'Leída', todo:'Por hacer', doing:'En curso', done:'Hecha', blocked:'Bloqueada', cancelled:'Cancelada' };
+  var STATUS_TONE = { pending:'amber', in_review:'blue', info_requested:'amber', approved:'green', rejected:'red', signed:'green', read:'green', todo:'slate', doing:'blue', done:'green', blocked:'red', cancelled:'slate' };
   var PRIO = { low:'Baja', medium:'Media', high:'Alta', urgent:'Urgente' };
   var PRIO_COLOR = { low:'var(--slate)', medium:'var(--blue)', high:'var(--amber)', urgent:'var(--red)' };
-  var OPEN = ['pending','in_review','info_requested'];
-  var EVENT = { created:'creó la solicitud', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', cancelled:'canceló' };
-  var EVENT_ACCENT = { approved:'g', signed:'g', rejected:'r', info_requested:'a', created:'br' };
+  var OPEN = ['pending','in_review','info_requested','todo','doing','blocked'];
+  var EVENT = { created:'creó el ítem', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', read:'marcó como leída', started:'empezó', completed:'completó', blocked:'bloqueó', resumed:'reanudó', cancelled:'canceló' };
+  var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
   var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all' };
@@ -282,7 +283,7 @@
     var route = location.hash || '#/bandeja';
 
     var nav = '';
-    nav += navItem('#/bandeja','📥','Bandeja', inboxOpen, route);
+    nav += navItem('#/bandeja','📥','Mi trabajo', inboxOpen, route);
     if(state.user.sup){
       var supOpen = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me && isOpen(r.status);}).length;
       nav += navItem('#/supervision','👁','Supervisión', supOpen, route);
@@ -353,8 +354,8 @@
     Object.keys(TYPE).forEach(function(t){ chips+='<button class="chip'+(f===t?' on':'')+'" onclick="CeoDesk.setFilter(\''+t+'\')">'+TYPE[t]+'</button>'; });
     var list = filtered.length ? '<div class="rows">'+filtered.map(requestRow).join('')+'</div>'
       : '<div class="empty"><div class="ic">🎉</div><p>No hay nada pendiente. Bandeja al día.</p></div>';
-    return { title:'Bandeja de decisiones', html:
-      '<div class="phead"><h1>Bandeja de decisiones</h1><p>Todo lo que espera tu lectura, aprobación, firma o decisión, en un solo lugar.</p></div>'+
+    return { title:'Mi trabajo', html:
+      '<div class="phead"><h1>Mi trabajo</h1><p>Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
       '<div class="toolbar">'+chips+'</div>'+list };
   }
@@ -413,16 +414,18 @@
       '<div class="phead"><h1>Nueva solicitud de decisión</h1><p>Pídele a cualquier persona que lea, apruebe, firme o decida. El contexto es obligatorio: así la decisión se toma con el debido proceso.</p></div>'+
       '<form class="card" id="newform" style="padding:24px;max-width:760px" onsubmit="return false">'+
         '<div class="field"><label>¿Qué necesitas?</label><div class="typegrid" id="typegrid">'+
-          Object.keys(TYPE).map(function(t){ return '<button type="button" class="topt'+(t==='approve'?' on':'')+'" data-type="'+t+'"><span class="ti">'+TYPE_ICON[t]+'</span>'+TYPE[t]+'</button>'; }).join('')+
+          Object.keys(TYPE).map(function(t){ return '<button type="button" class="topt'+(t==='task'?' on':'')+'" data-type="'+t+'"><span class="ti">'+TYPE_ICON[t]+'</span>'+TYPE[t]+'</button>'; }).join('')+
         '</div></div>'+
         '<div class="field"><label for="f-to">¿A quién se lo pides? *</label><div class="hint">Cualquier persona de Superlikers.</div><select id="f-to" class="sel">'+rosterOpts+'</select></div>'+
         '<div class="field"><label for="f-title">Título *</label><input id="f-title" class="inp" maxlength="120" placeholder="Ej. Contrato de alianza con RappiPay"></div>'+
         '<div class="two"><div class="field"><label for="f-prio">Prioridad</label><select id="f-prio" class="sel">'+
           Object.keys(PRIO).map(function(p){return '<option value="'+p+'"'+(p==='medium'?' selected':'')+'>'+PRIO[p]+'</option>';}).join('')+'</select></div>'+
           '<div class="field"><label for="f-due">Fecha límite</label><input id="f-due" type="date" class="inp"></div></div>'+
-        '<div class="field"><label for="f-ctx">Contexto: ¿qué es y por qué? *</label><div class="hint">Da el trasfondo suficiente para decidir sin preguntarte.</div><textarea id="f-ctx" class="ta"></textarea></div>'+
+        '<div class="field"><label for="f-ctx">Descripción / contexto *</label><div class="hint">Explica qué es y da el trasfondo suficiente.</div><textarea id="f-ctx" class="ta"></textarea></div>'+
+        '<div id="decision-fields">'+
         '<div class="field"><label for="f-rec">Tu recomendación *</label><div class="hint">No traigas solo el problema — trae tu propuesta.</div><textarea id="f-rec" class="ta"></textarea></div>'+
         '<div class="field"><label for="f-imp">Impacto y urgencia *</label><div class="hint">¿Qué pasa si se aprueba? ¿Y si no se decide a tiempo?</div><textarea id="f-imp" class="ta"></textarea></div>'+
+        '</div>'+
         '<div class="field"><label for="f-doc">Documento (nombre)</label><input id="f-doc" class="inp" placeholder="Ej. Contrato_RappiPay_v3.pdf"></div>'+
         '<div class="two"><div class="field"><label for="f-url">Enlace al documento</label><input id="f-url" class="inp" placeholder="https://drive.google.com/…"></div>'+
           '<div class="field"><label for="f-ver">Versión</label><input id="f-ver" class="inp" placeholder="Ej. v3 (rev. legal 12-jul)"></div></div>'+
@@ -441,14 +444,21 @@
     // acciones del destinatario
     var actions='';
     if(isAssignee && open){
-      var primary = r.type==='sign'
-        ? '<button class="btn btn--green" onclick="CeoDesk.act(\''+r.id+'\',\'sign\')">Firmar</button>'
-        : '<button class="btn btn--green" onclick="CeoDesk.act(\''+r.id+'\',\'approve\')">Aprobar</button>';
-      actions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Tu decisión</h3><div class="actionbar">'+
-        primary+
-        '<button class="btn btn--primary" onclick="CeoDesk.act(\''+r.id+'\',\'request_info\')">Pedir más información</button>'+
-        '<button class="btn btn--red" onclick="CeoDesk.act(\''+r.id+'\',\'reject\')">Rechazar</button>'+
-      '</div></div>';
+      var A=[];
+      if(r.type==='task'){
+        if(r.status==='todo') A=[['start','Empezar','btn--primary'],['block','Bloquear','btn--red']];
+        else if(r.status==='doing') A=[['complete','Marcar hecha','btn--green'],['block','Bloquear','btn--red']];
+        else if(r.status==='blocked') A=[['resume','Reanudar','btn--primary']];
+      } else if(r.type==='read'){
+        A=[['mark_read','Marcar leída','btn--green']];
+      } else if(r.type==='sign'){
+        A=[['sign','Firmar','btn--green'],['request_info','Pedir más información','btn--primary'],['reject','Rechazar','btn--red']];
+      } else {
+        A=[['approve','Aprobar','btn--green'],['request_info','Pedir más información','btn--primary'],['reject','Rechazar','btn--red']];
+      }
+      var heading=(r.type==='task'||r.type==='read')?'Acciones':'Tu decisión';
+      var btns=A.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
+      actions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">'+heading+'</h3><div class="actionbar">'+btns+'</div></div>';
     }
     // respuesta del solicitante cuando se pidió info
     var respond='';
@@ -459,8 +469,9 @@
     }
     var decision='';
     if(r.decidedAt){
-      var word = r.status==='signed'?'Firmado':r.status==='approved'?'Aprobado':r.status==='rejected'?'Rechazado':'Resuelto';
-      decision='<div class="decision"><div class="dblock" style="margin:0"><h3>Registro de la decisión</h3>'+
+      var WORD={signed:'Firmado',approved:'Aprobado',rejected:'Rechazado',done:'Completada',read:'Leída'};
+      var word=WORD[r.status]||'Resuelto';
+      decision='<div class="decision"><div class="dblock" style="margin:0"><h3>Registro</h3>'+
         '<p style="font-weight:650">'+word+' por '+esc(r.decidedByName||'')+' · '+esc(fmtDateTime(r.decidedAt))+'</p>'+
         (r.decisionNote?'<p style="margin-top:6px">“'+esc(r.decisionNote)+'”</p>':'')+'</div></div>';
     }
@@ -482,9 +493,9 @@
         '<div class="card" style="padding:24px">'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'+typeBadge(r.type)+statusBadge(r.status)+prioBadge(r.priority)+'<span class="rcode">'+esc(r.code)+'</span></div>'+
           '<h1 style="margin:0 0 16px;font-size:22px">'+esc(r.title)+'</h1>'+
-          '<div class="dblock"><h3>Contexto</h3><p>'+esc(r.context)+'</p></div>'+
-          '<div class="dblock"><h3>Recomendación de quien solicita</h3><p>'+esc(r.recommendation)+'</p></div>'+
-          '<div class="dblock"><h3>Impacto y urgencia</h3><p>'+esc(r.impact)+'</p></div>'+
+          '<div class="dblock"><h3>'+(DECISION_TYPES.indexOf(r.type)>=0?'Contexto':'Descripción')+'</h3><p>'+esc(r.context)+'</p></div>'+
+          (r.recommendation?'<div class="dblock"><h3>Recomendación de quien solicita</h3><p>'+esc(r.recommendation)+'</p></div>':'')+
+          (r.impact?'<div class="dblock"><h3>Impacto y urgencia</h3><p>'+esc(r.impact)+'</p></div>':'')+
           doc+decision+
         '</div>'+actions+respond+commentCard+
       '</div><div>'+
@@ -504,15 +515,21 @@
 
   // ---------- new form controller ----------
   var NewForm = {
-    type:'approve',
+    type:'task',
     mount:function(){
-      NewForm.type='approve';
+      NewForm.type='task';
       var grid=document.getElementById('typegrid');
+      NewForm.syncFields();
       grid.addEventListener('click',function(e){ var b=e.target.closest('.topt'); if(!b) return;
         NewForm.type=b.getAttribute('data-type');
         Array.prototype.forEach.call(grid.children,function(c){c.classList.toggle('on',c===b);});
+        NewForm.syncFields();
       });
       document.getElementById('f-submit').addEventListener('click',NewForm.submit);
+    },
+    syncFields:function(){
+      var dec = DECISION_TYPES.indexOf(NewForm.type)>=0;
+      var df=document.getElementById('decision-fields'); if(df) df.style.display = dec?'block':'none';
     },
     submit:function(){
       var g=function(id){return document.getElementById(id).value.trim();};
@@ -521,9 +538,13 @@
         documentName:g('f-doc'), documentUrl:g('f-url'), documentVersion:g('f-ver'),
         dueDate: document.getElementById('f-due').value ? new Date(document.getElementById('f-due').value).toISOString() : null };
       var err=document.getElementById('f-err');
+      var dec = DECISION_TYPES.indexOf(NewForm.type)>=0;
       if(!body.assigneeId){ err.textContent='Elige a quién le haces la solicitud.'; err.style.display='flex'; return; }
-      if(!body.title||!body.context||!body.recommendation||!body.impact){
-        err.textContent='Completa los campos obligatorios: sin contexto, recomendación e impacto no se puede pedir una decisión.'; err.style.display='flex'; return;
+      if(!body.title||!body.context||(dec && (!body.recommendation||!body.impact))){
+        err.textContent = dec
+          ? 'Completa los obligatorios: sin descripción, recomendación e impacto no se puede pedir una decisión.'
+          : 'Completa el título y la descripción.';
+        err.style.display='flex'; return;
       }
       var btn=document.getElementById('f-submit'); btn.disabled=true; btn.textContent='Enviando…';
       api('/requests',{method:'POST',body:body}).then(function(d){
@@ -537,10 +558,17 @@
     approve:{ title:'Aprobar', sub:'Quedará registrado como aprobado con tu nombre y fecha.', cta:'Aprobar', cls:'btn--green' },
     sign:{ title:'Firmar', sub:'Se registrará tu firma sobre el documento con sello de tiempo.', cta:'Firmar', cls:'btn--green' },
     reject:{ title:'Rechazar', sub:'Explica el motivo para que quede claro el porqué.', cta:'Rechazar', cls:'btn--red', requireNote:true },
-    request_info:{ title:'Pedir más información', sub:'La solicitud vuelve a quien la pidió con tu pregunta.', cta:'Enviar pregunta', cls:'btn--primary', requireNote:true }
+    request_info:{ title:'Pedir más información', sub:'Vuelve a quien lo pidió con tu pregunta.', cta:'Enviar pregunta', cls:'btn--primary', requireNote:true },
+    block:{ title:'Bloquear tarea', sub:'Explica qué la bloquea.', cta:'Bloquear', cls:'btn--red', requireNote:true },
+    start:{ direct:true }, complete:{ direct:true }, resume:{ direct:true }, mark_read:{ direct:true }
   };
   function act(id, action){
-    var m=ACT_META[action]; var r=findReq(id);
+    var m=ACT_META[action]||{}; var r=findReq(id);
+    if(m.direct){
+      api('/request-action',{method:'POST',body:{id:id,action:action}}).then(function(){ return loadRequests(); })
+        .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+      return;
+    }
     openModal(m.title+(r?' · '+r.code:''), m.sub, m.cta, m.cls, m.requireNote, function(note, close){
       api('/request-action',{method:'POST',body:{id:id,action:action,note:note}}).then(function(){
         return loadRequests();

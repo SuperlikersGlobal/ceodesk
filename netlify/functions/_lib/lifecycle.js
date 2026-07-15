@@ -1,18 +1,34 @@
-// Lógica pura del ciclo de vida de una solicitud de decisión.
+// Lógica pura del ciclo de vida de un ítem de trabajo.
 // Sin dependencias de red/almacenamiento: fácil de testear.
+//
+// Cada TIPO de ítem tiene su propio conjunto de acciones y estados:
+//   approve/sign/decide -> aprobar/firmar/decidir (Pendiente -> Aprobada/Firmada/Rechazada)
+//   read                -> lectura (Pendiente -> Leída)
+//   task                -> tarea (Por hacer -> En curso -> Hecha / Bloqueada)
 import { randomUUID } from 'node:crypto'
 
-export const REQUEST_TYPES = ['read', 'approve', 'sign', 'decide']
+export const REQUEST_TYPES = ['read', 'approve', 'sign', 'decide', 'task']
 export const PRIORITIES = ['low', 'medium', 'high', 'urgent']
-export const OPEN_STATUSES = ['pending', 'in_review', 'info_requested']
+
+// Estados en los que el ítem sigue abierto (esperando acción).
+export const OPEN_STATUSES = ['pending', 'in_review', 'info_requested', 'todo', 'doing', 'blocked']
+
+// Tipos que exigen "debido proceso" (contexto + recomendación + impacto).
+export const DECISION_TYPES = ['approve', 'sign', 'decide']
+export function isDecisionType(type) { return DECISION_TYPES.includes(type) }
 
 // action -> nuevo estado
 const ACTION_STATUS = {
   approve: 'approved',
   reject: 'rejected',
   sign: 'signed',
+  mark_read: 'read',
   request_info: 'info_requested',
   provide_info: 'in_review',
+  start: 'doing',
+  complete: 'done',
+  block: 'blocked',
+  resume: 'doing',
   cancel: 'cancelled',
   comment: null, // no cambia el estado
 }
@@ -22,18 +38,33 @@ const ACTION_EVENT = {
   approve: 'approved',
   reject: 'rejected',
   sign: 'signed',
+  mark_read: 'read',
   request_info: 'info_requested',
   provide_info: 'info_provided',
+  start: 'started',
+  complete: 'completed',
+  block: 'blocked',
+  resume: 'resumed',
   cancel: 'cancelled',
   comment: 'commented',
 }
 
-// Acciones reservadas al destinatario (quien debe leer/aprobar/firmar/decidir)
-export const ASSIGNEE_ACTIONS = ['approve', 'reject', 'sign', 'request_info']
-// Acciones del solicitante
+// Acciones del destinatario, por tipo de ítem. El solicitante siempre puede
+// provide_info/cancel y cualquiera con acceso puede comentar.
+export const ACTIONS_BY_TYPE = {
+  approve: ['approve', 'reject', 'request_info'],
+  sign: ['sign', 'reject', 'request_info'],
+  decide: ['approve', 'reject', 'request_info'],
+  read: ['mark_read'],
+  task: ['start', 'complete', 'block', 'resume'],
+}
+const UNIVERSAL_ACTIONS = ['provide_info', 'cancel', 'comment']
+
+// Todas las acciones que puede tomar el destinatario (para el control de acceso).
+export const ASSIGNEE_ACTIONS = Array.from(new Set(Object.values(ACTIONS_BY_TYPE).flat()))
 export const REQUESTER_ACTIONS = ['provide_info', 'cancel']
-// Acciones que registran una decisión final (auditoría / "firma")
-const DECISION_ACTIONS = ['approve', 'reject', 'sign']
+// Acciones que registran un desenlace (auditoría: quién y cuándo).
+const RESOLUTION_ACTIONS = ['approve', 'reject', 'sign', 'complete', 'mark_read']
 
 export function isOpen(status) {
   return OPEN_STATUSES.includes(status)
@@ -43,8 +74,19 @@ export function isValidAction(action) {
   return Object.prototype.hasOwnProperty.call(ACTION_EVENT, action)
 }
 
-// Crea la solicitud inicial (con evento 'created'). `input` ya viene validado.
-// `assignee` = { email, name } del destinatario que debe leer/aprobar/firmar/decidir.
+// ¿La acción aplica a un ítem de este tipo?
+export function isActionAllowedForType(action, type) {
+  if (UNIVERSAL_ACTIONS.includes(action)) return true
+  return (ACTIONS_BY_TYPE[type] || []).includes(action)
+}
+
+// Estado inicial según el tipo.
+export function initialStatus(type) {
+  return type === 'task' ? 'todo' : 'pending'
+}
+
+// Crea el ítem inicial (con evento 'created'). `input` ya viene validado.
+// `assignee` = { email, name } de quien debe leer/aprobar/firmar/decidir/hacer.
 export function buildRequest(input, code, requester, assignee, now = new Date().toISOString()) {
   const id = randomUUID()
   return {
@@ -52,16 +94,17 @@ export function buildRequest(input, code, requester, assignee, now = new Date().
     code,
     title: input.title,
     type: input.type,
-    status: 'pending',
+    status: initialStatus(input.type),
     priority: input.priority || 'medium',
     requesterId: requester.email,
     requesterName: requester.name,
     requesterTitle: requester.title || null,
     assigneeId: assignee.email,
     assigneeName: assignee.name,
+    area: input.area || null,
     context: input.context,
-    recommendation: input.recommendation,
-    impact: input.impact,
+    recommendation: input.recommendation || null,
+    impact: input.impact || null,
     documentName: input.documentName || null,
     documentUrl: input.documentUrl || null,
     documentVersion: input.documentVersion || null,
@@ -77,15 +120,14 @@ export function buildRequest(input, code, requester, assignee, now = new Date().
   }
 }
 
-// Aplica una acción a la solicitud y devuelve la copia actualizada.
-// Lanza Error con mensaje claro si la acción no es válida.
+// Aplica una acción al ítem y devuelve la copia actualizada.
 export function applyAction(req, action, actor, note, now = new Date().toISOString()) {
   if (!isValidAction(action)) throw new Error('Acción no válida')
   const next = { ...req, events: [...(req.events || [])] }
   const newStatus = ACTION_STATUS[action]
   if (newStatus) next.status = newStatus
   next.updatedAt = now
-  if (DECISION_ACTIONS.includes(action)) {
+  if (RESOLUTION_ACTIONS.includes(action)) {
     next.decidedAt = now
     next.decidedByName = actor.name
     next.decisionNote = note || null
