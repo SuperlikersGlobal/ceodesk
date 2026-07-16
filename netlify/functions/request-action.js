@@ -7,6 +7,7 @@ import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
 import { applyAction, isOpen, isValidAction, isActionAllowedForType, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
 import { canViewRequest, assigneeOf, emailOf } from './_lib/users.js'
+import { notifyRequesterAttended } from './_lib/notify.js'
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
@@ -49,5 +50,13 @@ export default async (req) => {
   const actor = { email: u.u, name: u.name }
   const updated = applyAction(request, action, actor, (note || '').trim() || null)
   await saveRequest(updated)
+
+  // Avisar por correo al solicitante cuando OTRA persona atiende su solicitud.
+  // (Si el solicitante actúa sobre lo suyo, no se auto-notifica.)
+  if (String(updated.requesterId || '').toLowerCase() !== me) {
+    const evt = updated.events[updated.events.length - 1]
+    await notifyRequesterAttended(updated, evt && evt.type, actor.name, (note || '').trim() || null)
+  }
+
   return json({ request: updated })
 }

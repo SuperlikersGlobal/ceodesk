@@ -39,6 +39,11 @@ Producción: **https://ceodesk.superlikers.com**
   resolución, cumplimiento de fecha, y carga por persona/área/tipo/estado.
 - **Auditoría** completa por ítem (quién hizo qué y cuándo) y **registro interno
   de firma** (quién firmó, cuándo, sobre qué versión).
+- **Avisos por correo:** cuando **otra persona atiende una solicitud tuya**
+  (la aprueba, firma, resuelve, comenta, pide info, etc.), el **solicitante**
+  recibe un email con el detalle y un enlace directo al ítem. Vía SMTP de Google
+  Workspace (se puede reutilizar la cuenta del CRM). Si el propio solicitante
+  actúa sobre lo suyo, no se auto-notifica.
 - **Jira (espejo vivo, por usuario):** cualquier miembro puede **Conectar Jira**
   ("Conéctate con Atlassian", OAuth 2.0 3LO) y ver en "Mi trabajo" sus **issues
   asignados**, siempre al día (estado y datos reflejados desde Jira, con enlace al
@@ -80,7 +85,7 @@ netlify/functions/
   google-login.js                 POST /api/google-login     (credential -> token de sesión)
   roster.js                       GET  /api/roster           (personas para elegir destinatario)
   requests.js                     GET/POST /api/requests      (listar según visibilidad / crear)
-  request-action.js               POST /api/request-action    (acciones sobre un ítem)
+  request-action.js               POST /api/request-action    (acciones + aviso al solicitante)
   google-tasks.js                 GET/POST /api/google-tasks  (Google Tasks: hub CEO / propio líder)
   jira-connect.js                 GET  /api/jira-connect      (URL de autorización OAuth de Jira)
   jira-callback.js                GET  /api/jira-callback     (fin del OAuth: guarda tokens del usuario)
@@ -90,6 +95,9 @@ netlify/functions/
   _lib/google-auth.js             cuenta de servicio + delegación de dominio (access token)
   _lib/google-tasks.js            integración Google Tasks (formato notes, huella, · meta)
   _lib/jira.js                    integración Jira (OAuth 3LO, mapeo de estados, proyección)
+  _lib/mailer.js                  envío SMTP (nodemailer, carga perezosa)
+  _lib/notify.js                  aviso al solicitante cuando su solicitud es atendida
+  _lib/notify-template.js         plantilla (pura) del correo de "solicitud atendida"
   _lib/store.js                   Netlify Blobs (con fallback en memoria para tests)
   _lib/users.js                   alta por Google, roles, Chief of Staff, visibilidad
   _lib/org.js                     organigrama (ancestros, roster) desde la variable ORG
@@ -117,7 +125,11 @@ netlify.toml                      publish=public, /api/* -> funciones, SPA fallb
 | `GOOGLE_TASKS_IMPERSONATE` | (Opcional) Cuenta de Workspace a impersonar (dueña del hub). Por defecto, el 1er CEO. |
 | `JIRA_OAUTH_CLIENT_ID` | (Opcional) Client ID de la app OAuth 2.0 (3LO) registrada en `developer.atlassian.com`. |
 | `JIRA_OAUTH_CLIENT_SECRET` | (Opcional) Secret de la app OAuth de Jira. **Secreto.** |
-| `APP_BASE_URL` | (Opcional) Base pública para el `redirect_uri` de Jira. Por defecto `https://ceodesk.superlikers.com`. |
+| `APP_BASE_URL` | (Opcional) Base pública para el `redirect_uri` de Jira y los enlaces de los correos. Por defecto `https://ceodesk.superlikers.com`. |
+| `SMTP_USER` | (Opcional) Cuenta SMTP para los avisos por correo (Gmail Workspace). Se puede reutilizar la del CRM. |
+| `SMTP_PASS` | (Opcional) App password de Gmail (16 caracteres). **Secreto.** |
+| `SMTP_FROM` | (Opcional) Remitente mostrado. Por defecto `CeoDesk <SMTP_USER>`. |
+| `SMTP_HOST` / `SMTP_PORT` | (Opcional) Por defecto `smtp.gmail.com` / `465`. |
 
 En Google Cloud, autoriza `https://ceodesk.superlikers.com` (y `https://ceodesk.netlify.app`) como *Authorized JavaScript origins* del Client ID.
 
@@ -194,8 +206,9 @@ Ejercita los ciclos de tarea, incidencia y decisión, la visibilidad por
 organigrama, el Chief of Staff, la privacidad entre pares y las etiquetas,
 usando un almacén en memoria (sin tocar Blobs real). También valida los helpers
 del contrato Google Tasks (huella `· LADCC-XXXX`, marcador `· meta`, limpieza de
-la descripción) y los mapeos de Jira (estado/prioridad, proyección de issues,
-URL de autorización y `state` firmado), todo sin tocar la red.
+la descripción), los mapeos de Jira (estado/prioridad, proyección de issues,
+URL de autorización y `state` firmado) y la plantilla del correo de "solicitud
+atendida", todo sin tocar la red.
 
 ## Roadmap
 
