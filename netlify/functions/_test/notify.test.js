@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 process.env.APP_BASE_URL = 'https://ceodesk.superlikers.com'
-const { buildAttendedEmail, verbFor } = await import('../_lib/notify-template.js')
+const { buildAttendedEmail, buildAssignedEmail, verbFor, typeLabelFor } = await import('../_lib/notify-template.js')
 
 const req = { id: 'abc-123', code: 'CD-42', title: 'Aprobar presupuesto Q3', requesterId: 'ana@iwin.im' }
 
@@ -28,6 +28,23 @@ test('buildAttendedEmail incluye la nota cuando existe', () => {
   const m = buildAttendedEmail(req, 'rejected', 'Luis', 'Falta el anexo financiero')
   assert.match(m.text, /Nota: "Falta el anexo financiero"/)
   assert.match(m.html, /Falta el anexo financiero/)
+})
+
+test('typeLabelFor traduce el tipo a español', () => {
+  assert.equal(typeLabelFor('task'), 'una tarea')
+  assert.equal(typeLabelFor('bug'), 'una incidencia')
+  assert.equal(typeLabelFor('approve'), 'una aprobación')
+  assert.equal(typeLabelFor('otro'), 'una solicitud')
+})
+
+test('buildAssignedEmail arma el aviso de nueva asignación con enlace y fecha', () => {
+  const asg = { id: 'zz-9', code: 'CD-77', type: 'task', title: 'Preparar informe', requesterName: 'Luis', assigneeId: 'ana@iwin.im', dueDate: '2026-08-05' }
+  const m = buildAssignedEmail(asg)
+  assert.equal(m.subject, 'CeoDesk · Luis te asignó una tarea (CD-77)')
+  assert.match(m.text, /Luis te asignó una tarea: "Preparar informe" \(CD-77\)/)
+  assert.match(m.text, /Fecha límite: 2026-08-05/)
+  assert.match(m.text, /#\/solicitud\/zz-9/)
+  assert.match(m.html, /Abrir la solicitud/)
 })
 
 test('buildAttendedEmail escapa HTML en título y nota', () => {

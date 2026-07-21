@@ -39,11 +39,12 @@ Producción: **https://ceodesk.superlikers.com**
   resolución, cumplimiento de fecha, y carga por persona/área/tipo/estado.
 - **Auditoría** completa por ítem (quién hizo qué y cuándo) y **registro interno
   de firma** (quién firmó, cuándo, sobre qué versión).
-- **Avisos por correo:** cuando **otra persona atiende una solicitud tuya**
-  (la aprueba, firma, resuelve, comenta, pide info, etc.), el **solicitante**
-  recibe un email con el detalle y un enlace directo al ítem. Vía SMTP de Google
-  Workspace (se puede reutilizar la cuenta del CRM). Si el propio solicitante
-  actúa sobre lo suyo, no se auto-notifica.
+- **Avisos por correo** (SMTP de Google Workspace, reutilizable la cuenta del CRM):
+  - Cuando **te asignan una solicitud nueva**, el **destinatario** recibe un email
+    con el tipo, el título, la fecha límite y un enlace al ítem.
+  - Cuando **otra persona atiende una solicitud tuya** (la aprueba, firma, resuelve,
+    comenta, pide info, etc.), el **solicitante** recibe el aviso.
+  - No hay auto-notificación (si actúas sobre lo tuyo, no te llega correo).
 - **Jira (espejo vivo, por usuario):** cualquier miembro puede **Conectar Jira**
   ("Conéctate con Atlassian", OAuth 2.0 3LO) y ver en "Mi trabajo" sus **issues
   asignados**, siempre al día (estado y datos reflejados desde Jira, con enlace al
@@ -84,7 +85,7 @@ netlify/functions/
   config.js                       GET  /api/config          (clientId Google, dominio, áreas)
   google-login.js                 POST /api/google-login     (credential -> token de sesión)
   roster.js                       GET  /api/roster           (personas para elegir destinatario)
-  requests.js                     GET/POST /api/requests      (listar según visibilidad / crear)
+  requests.js                     GET/POST /api/requests      (listar / crear + aviso al destinatario)
   request-action.js               POST /api/request-action    (acciones + aviso al solicitante)
   google-tasks.js                 GET/POST /api/google-tasks  (Google Tasks: hub CEO / propio líder)
   jira-connect.js                 GET  /api/jira-connect      (URL de autorización OAuth de Jira)
@@ -96,8 +97,8 @@ netlify/functions/
   _lib/google-tasks.js            integración Google Tasks (formato notes, huella, · meta)
   _lib/jira.js                    integración Jira (OAuth 3LO, mapeo de estados, proyección)
   _lib/mailer.js                  envío SMTP (nodemailer, carga perezosa)
-  _lib/notify.js                  aviso al solicitante cuando su solicitud es atendida
-  _lib/notify-template.js         plantilla (pura) del correo de "solicitud atendida"
+  _lib/notify.js                  avisos: asignación nueva y solicitud atendida
+  _lib/notify-template.js         plantillas (puras) de los correos
   _lib/store.js                   Netlify Blobs (con fallback en memoria para tests)
   _lib/users.js                   alta por Google, roles, Chief of Staff, visibilidad
   _lib/org.js                     organigrama (ancestros, roster) desde la variable ORG
