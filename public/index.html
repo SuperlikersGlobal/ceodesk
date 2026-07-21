@@ -224,7 +224,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEditId:null, fiscalView:'list', fiscalCalMonth:'' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'' };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -1325,11 +1325,11 @@
   }
 
   function fiscalSeed(){
-    if(!confirm('¿Cargar el catálogo de obligaciones 2026?\n\n~100 obligaciones para Colombia, México y USA.')) return;
-    api('/fiscal?seed=1')
-      .then(function(){ return loadFiscal(); })
-      .then(function(){ render(); })
-      .catch(function(e){ alert(e.message||'Error al cargar'); });
+    if(!confirm('¿Cargar / recargar el catálogo de obligaciones 2026?\n\n~107 obligaciones para Colombia, México y USA. No duplica lo ya existente.')) return;
+    state.fiscalBusy=true;
+    api('/fiscal?reseed=1')
+      .then(function(d){ state.fiscal=d.obligations||[]; state.fiscalLoaded=true; state.fiscalBusy=false; render(); })
+      .catch(function(e){ state.fiscalBusy=false; alert(e.message||'Error al cargar'); });
   }
 
   // expose
