@@ -25,6 +25,18 @@ export function isChiefOfStaff(email) {
   return chiefOfStaffEmails().includes(String(email || '').toLowerCase())
 }
 
+// Equipo financiero: ve y gestiona Cumplimiento Fiscal. Configurable con FINANCE_TEAM.
+// El CEO siempre tiene acceso, esté o no en la lista.
+export function financeTeamEmails() {
+  return String(process.env.FINANCE_TEAM || 'ma.isabel@iwin.im,angela@iwin.im')
+    .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+}
+export function canViewFiscal(user) {
+  if (!user) return false
+  const email = String(user.u || user.email || '').toLowerCase()
+  return isCeo(user) || financeTeamEmails().includes(email)
+}
+
 // Destinatario por defecto (compatibilidad con solicitudes antiguas sin destinatario).
 export function defaultAssignee() {
   return ceoEmails()[0] || 'luis@iwin.im'
