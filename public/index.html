@@ -285,8 +285,8 @@
       var bin=atob(seg), bytes=new Uint8Array(bin.length);
       for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
       var p=JSON.parse(new TextDecoder('utf-8').decode(bytes)); // UTF-8 para nombres con tildes
-      return {email:p.u,name:p.name,role:p.role,title:p.title,sup:!!p.sup};
-    } catch(e){ return {email:'',name:'Usuario',role:'leader',title:'',sup:false}; }
+      return {email:p.u,name:p.name,role:p.role,title:p.title,sup:!!p.sup,fin:!!p.fin};
+    } catch(e){ return {email:'',name:'Usuario',role:'leader',title:'',sup:false,fin:false}; }
   }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
   function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
@@ -363,7 +363,7 @@
     nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route);
     if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
     nav += navItem('#/historial','🗂️','Historial', 0, route);
-    nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
+    if(state.user.fin) nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
 
     var view = renderRoute(route);
 
@@ -398,7 +398,7 @@
     if(route==='#/tablero') return viewBoard();
     if(route==='#/metricas') return viewMetrics();
     if(route==='#/historial') return viewHistory();
-    if(route==='#/fiscal') return viewFiscal();
+    if(route==='#/fiscal') return state.user.fin ? viewFiscal() : { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">🔒</div><p>No tienes acceso a esta sección. Contacta al CEO si crees que deberías verla.</p></div>' };
     return viewInbox(); // #/bandeja para todos
   }
 
