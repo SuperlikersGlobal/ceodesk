@@ -193,6 +193,8 @@ async function ensureSeeded() {
 export default async (req) => {
   const u = authUser(req)
   if (!u) return json({ error: 'No autorizado' }, 401)
+  // Solo el CEO y el equipo financiero (flag `fin` en el token) acceden.
+  if (!u.fin && u.role !== 'ceo') return json({ error: 'No tienes acceso a esta sección.' }, 403)
 
   const url = new URL(req.url)
 
