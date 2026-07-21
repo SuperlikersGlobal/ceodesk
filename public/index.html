@@ -224,7 +224,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEditId:null };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -270,7 +270,7 @@
   function loadAndStart(){
     // deriva el usuario desde el token (payload firmado) antes de cargar
     state.user = decodeUser(state.token);
-    Promise.all([loadRequests(), loadRoster(), loadGtasks(), loadJira()]).then(function(){
+    Promise.all([loadRequests(), loadRoster(), loadGtasks(), loadJira(), loadFiscal()]).then(function(){
       state.loaded = true;
       if(!location.hash) location.hash = '#/bandeja';
       render();
@@ -290,6 +290,7 @@
   }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
   function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
+  function loadFiscal(){ return api('/fiscal').then(function(d){ state.fiscal = d.obligations||[]; state.fiscalLoaded=true; }).catch(function(){ state.fiscal=[]; state.fiscalLoaded=true; }); }
   // Google Tasks: el CEO ve el hub (6 listas); los líderes, sus propias listas (opt-in).
   function loadGtasks(){
     if(!state.user || !(state.user.role==='ceo' || state.user.sup)){ state.gtasks=[]; state.gtasksEnabled=false; state.gtasksConnected=false; return Promise.resolve(); }
@@ -362,6 +363,7 @@
     nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route);
     if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
     nav += navItem('#/historial','🗂️','Historial', 0, route);
+    nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
 
     var view = renderRoute(route);
 
@@ -396,6 +398,7 @@
     if(route==='#/tablero') return viewBoard();
     if(route==='#/metricas') return viewMetrics();
     if(route==='#/historial') return viewHistory();
+    if(route==='#/fiscal') return viewFiscal();
     return viewInbox(); // #/bandeja para todos
   }
 
@@ -986,6 +989,209 @@
   function toggleMenu(){ var s=document.getElementById('side'); if(s) s.classList.toggle('open'); }
   function closeMenu(){ var s=document.getElementById('side'); if(s) s.classList.remove('open'); }
 
+  // ── Cumplimiento Fiscal ──────────────────────────────────────────────────
+  var ENTITY_LABEL = { iwin_col:'iWin SAS', superlikers_col:'Superlikers SAS', inverpinto:'InverPinto', ecosistemas:'Ecosistemas', sti_usa:'STI Inc.', iwin_llc:'iWin LLC', delca2:'Delca2 LLC', sl_mex:'Splkrs MX' };
+  var COUNTRY_FLAG = { CO:'🇨🇴', MX:'🇲🇽', US:'🇺🇸' };
+  var FREQ_LABEL = { monthly:'Mensual', bimestral:'Bimestral', quarterly:'Trimestral', annual:'Anual', one_time:'Única vez' };
+  var OB_TYPE_LABEL = { tax:'Impuesto', labor:'Laboral', reporting:'Reporte', compliance:'Cumplimiento' };
+
+  function fiscalDueBadge(due_date, status){
+    if(status==='complied') return '<span class="badge b-green bdot">Cumplida</span>';
+    var now = new Date(); var d = new Date(due_date+'T12:00:00');
+    var diff = Math.floor((d-now)/86400000);
+    if(diff<0) return '<span class="badge b-red bdot">Vencida hace '+Math.abs(diff)+'d</span>';
+    if(diff===0) return '<span class="badge b-red bdot">Vence hoy</span>';
+    if(diff<=7) return '<span class="badge b-red bdot">'+diff+'d</span>';
+    if(diff<=30) return '<span class="badge b-amber bdot">'+diff+'d</span>';
+    return '<span class="badge b-slate bdot">'+diff+'d</span>';
+  }
+  function fiscalTypeBadge(t){
+    var m={tax:'b-brand',labor:'b-blue',reporting:'b-slate',compliance:'b-amber'};
+    return '<span class="badge '+(m[t]||'b-slate')+'">'+(OB_TYPE_LABEL[t]||t)+'</span>';
+  }
+  function entityBadges(ids){
+    return (ids||[]).map(function(e){ return '<span class="badge b-slate" style="font-size:11px">'+esc(ENTITY_LABEL[e]||e)+'</span>'; }).join(' ');
+  }
+  function fmtDate(s){ if(!s) return '—'; var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+  function fmtUsd(v){ if(v==null||v==='') return '—'; return '$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+  function viewFiscal(){
+    if(!state.fiscalLoaded){
+      loadFiscal().then(function(){ render(); });
+      return { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">⏳</div><p>Cargando obligaciones…</p></div>' };
+    }
+
+    var items = state.fiscal.slice();
+    var country = state.fiscalCountry;
+    var status = state.fiscalStatus;
+    if(country) items = items.filter(function(o){ return o.country===country; });
+    if(status) items = items.filter(function(o){ return o.status===status; });
+
+    var today = new Date();
+    var in30 = new Date(today.getTime()+30*86400000);
+
+    var totalAll = state.fiscal.length;
+    var overdue = state.fiscal.filter(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today; }).length;
+    var upcoming = state.fiscal.filter(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')>=today && new Date(o.due_date+'T12:00:00')<=in30; }).length;
+    var complied = state.fiscal.filter(function(o){ return o.status==='complied'; }).length;
+    var budgetTotal = state.fiscal.filter(function(o){ return o.status!=='complied' && o.estimated_amount_usd; }).reduce(function(s,o){ return s+Number(o.estimated_amount_usd||0); },0);
+
+    var html = '';
+
+    // Stat cards
+    html += '<div class="phead"><h1>📅 Cumplimiento Fiscal</h1><p>Obligaciones fiscales, tributarias y laborales de las 8 entidades del grupo iWin.</p></div>';
+    html += '<div class="stats" style="grid-template-columns:repeat(4,1fr)">';
+    html += '<div class="stat"><div class="stat__label">Total obligaciones</div><div class="stat__value">'+totalAll+'</div></div>';
+    html += '<div class="stat"><div class="stat__label">⚠ Vencidas</div><div class="stat__value danger">'+overdue+'</div></div>';
+    html += '<div class="stat"><div class="stat__label">📆 Próximos 30 días</div><div class="stat__value warn">'+upcoming+'</div></div>';
+    html += '<div class="stat"><div class="stat__label">✅ Cumplidas 2026</div><div class="stat__value" style="color:var(--green)">'+complied+'</div></div>';
+    html += '</div>';
+
+    if(budgetTotal>0){
+      html += '<div style="background:var(--amber-soft);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent);border-radius:12px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">';
+      html += '<span style="font-size:20px">💰</span><div><div style="font-weight:700;font-size:14px">Presupuesto estimado pendiente</div><div style="color:var(--amber);font-weight:800;font-size:20px">'+fmtUsd(budgetTotal)+' USD</div></div>';
+      html += '</div>';
+    }
+
+    // País tabs
+    html += '<div class="toolbar" style="margin-bottom:10px">';
+    html += '<button class="chip'+(country===''?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'\')">🌎 Todos</button>';
+    html += '<button class="chip'+(country==='CO'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'CO\')">🇨🇴 Colombia</button>';
+    html += '<button class="chip'+(country==='MX'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'MX\')">🇲🇽 México</button>';
+    html += '<button class="chip'+(country==='US'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'US\')">🇺🇸 USA</button>';
+    html += '</div>';
+
+    // Status filter chips
+    html += '<div class="toolbar">';
+    html += '<button class="chip'+(status===''?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'\')">Todos</button>';
+    html += '<button class="chip'+(status==='overdue'?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'overdue\')" style="color:var(--red)">⚠ Vencidas</button>';
+    html += '<button class="chip'+(status==='pending'?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'pending\')">⏳ Pendientes</button>';
+    html += '<button class="chip'+(status==='complied'?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'complied\')" style="color:var(--green)">✅ Cumplidas</button>';
+    html += '</div>';
+
+    if(items.length===0){
+      html += '<div class="empty"><div class="ic">🎉</div><p>No hay obligaciones con este filtro.</p></div>';
+      return { title:'Cumplimiento Fiscal', html:html, after:function(){ fiscalAfter(); } };
+    }
+
+    // Agrupar por mes
+    var groups = {};
+    items.forEach(function(o){
+      var key = o.due_date ? o.due_date.slice(0,7) : '—';
+      if(!groups[key]) groups[key]=[];
+      groups[key].push(o);
+    });
+    var keys = Object.keys(groups).sort();
+    var MONTHS = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+    keys.forEach(function(k){
+      var parts = k.split('-');
+      var mLabel = k==='—' ? '—' : (MONTHS[+parts[1]]||parts[1])+' '+parts[0];
+      html += '<div class="rowlbl">'+mLabel+'</div>';
+      html += '<div class="rows" style="margin-bottom:16px">';
+      groups[k].forEach(function(o){
+        var overdue = o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today;
+        var isEdit = state.fiscalEditId===o.id;
+        var rowStyle = overdue ? 'border-left:3px solid var(--red)' : (o.status==='complied' ? 'opacity:.65' : '');
+        html += '<div class="row" style="flex-wrap:wrap;gap:8px;'+rowStyle+'">';
+        // Left block
+        html += '<div style="min-width:0;flex:1">';
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">';
+        html += '<span style="font-size:18px">'+COUNTRY_FLAG[o.country]+'</span>';
+        html += '<span style="font-weight:700;font-size:14.5px">'+esc(o.obligation_name)+'</span>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-size:12.5px">';
+        html += entityBadges(o.entity_ids);
+        html += fiscalTypeBadge(o.obligation_type);
+        html += '<span class="badge b-slate">'+(FREQ_LABEL[o.frequency]||o.frequency)+'</span>';
+        if(o.notes) html += '<span style="color:var(--muted);font-size:12px">'+esc(o.notes.slice(0,80))+'</span>';
+        html += '</div></div>';
+        // Right block
+        html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">';
+        html += '<div style="display:flex;gap:8px;align-items:center">';
+        html += '<span style="font-size:12px;color:var(--muted)">Vence '+fmtDate(o.due_date)+'</span>';
+        html += fiscalDueBadge(o.due_date, o.status);
+        html += '</div>';
+        // Budget field
+        if(isEdit){
+          html += '<div style="display:flex;gap:6px;align-items:center">';
+          html += '<input id="fbudget-'+o.id+'" type="number" placeholder="Presup. USD" value="'+(o.estimated_amount_usd||'')+'" style="width:120px;border:1px solid var(--border-strong);border-radius:8px;padding:6px 9px;font-size:13px;background:var(--surface);color:var(--ink)" />';
+          html += '<button class="btn btn--primary" style="padding:6px 12px;font-size:12.5px" onclick="CeoDesk.fiscalSaveBudget(\''+o.id+'\')">Guardar</button>';
+          html += '<button class="btn" style="padding:6px 10px;font-size:12.5px" onclick="CeoDesk.fiscalCancelEdit()">✕</button>';
+          html += '</div>';
+        } else {
+          html += '<div style="display:flex;gap:6px;align-items:center">';
+          if(o.estimated_amount_usd!=null) html += '<span style="font-weight:700;color:var(--ink)">'+fmtUsd(o.estimated_amount_usd)+' USD</span>';
+          html += '<button class="btn" style="padding:5px 9px;font-size:12px" onclick="CeoDesk.fiscalEdit(\''+o.id+'\')" title="Editar presupuesto">💰</button>';
+          if(o.status!=='complied'){
+            html += '<button class="btn btn--green" style="padding:5px 10px;font-size:12px" onclick="CeoDesk.fiscalComply(\''+o.id+'\')">✓ Cumplida</button>';
+          } else {
+            html += '<button class="btn" style="padding:5px 10px;font-size:12px;color:var(--muted)" onclick="CeoDesk.fiscalUndo(\''+o.id+'\')">↩ Deshacer</button>';
+          }
+          html += '</div>';
+        }
+        html += '</div>'; // right
+        html += '</div>'; // row
+      });
+      html += '</div>';
+    });
+
+    if(state.fiscal.length===0){
+      html += '<div style="margin-top:20px;text-align:center"><button class="btn btn--primary" onclick="CeoDesk.fiscalSeed()">⚡ Cargar obligaciones 2026</button><p style="color:var(--muted);font-size:13px;margin-top:8px">Siembra el catálogo completo de Colombia, México y USA para 2026.</p></div>';
+    }
+
+    return { title:'Cumplimiento Fiscal', html:html, after:function(){ fiscalAfter(); } };
+  }
+
+  function fiscalAfter(){
+    // auto-focus budget input if editing
+    var id = state.fiscalEditId;
+    if(id){ var el=document.getElementById('fbudget-'+id); if(el){ el.focus(); el.select(); } }
+  }
+
+  function fiscalSetCountry(c){ state.fiscalCountry=c; render(); }
+  function fiscalSetStatus(s){ state.fiscalStatus=s; render(); }
+  function fiscalEdit(id){ state.fiscalEditId=id; render(); }
+  function fiscalCancelEdit(){ state.fiscalEditId=null; render(); }
+
+  function fiscalComply(id){
+    if(!confirm('¿Marcar esta obligación como cumplida?')) return;
+    var ob = state.fiscal.find(function(o){ return o.id===id; });
+    if(!ob) return;
+    var now = new Date().toISOString().slice(0,10);
+    api('/fiscal',{method:'PUT',body:{id:id, status:'complied', compliance_date:now}})
+      .then(function(d){ return loadFiscal(); })
+      .then(function(){ render(); })
+      .catch(function(e){ alert(e.message); });
+  }
+
+  function fiscalUndo(id){
+    if(!confirm('¿Revertir a estado pendiente?')) return;
+    api('/fiscal',{method:'PUT',body:{id:id, status:'pending', compliance_date:null}})
+      .then(function(){ return loadFiscal(); })
+      .then(function(){ render(); })
+      .catch(function(e){ alert(e.message); });
+  }
+
+  function fiscalSaveBudget(id){
+    var el = document.getElementById('fbudget-'+id);
+    var val = el ? el.value.trim() : '';
+    var num = val==='' ? null : Number(val);
+    if(val!=='' && isNaN(num)){ alert('Ingresa un número válido'); return; }
+    api('/fiscal',{method:'PUT',body:{id:id, estimated_amount_usd:num}})
+      .then(function(){ return loadFiscal(); })
+      .then(function(){ state.fiscalEditId=null; render(); })
+      .catch(function(e){ alert(e.message); });
+  }
+
+  function fiscalSeed(){
+    if(!confirm('¿Cargar el catálogo de 2026? Esto crea ~100 obligaciones.')) return;
+    api('/fiscal?seed=1')
+      .then(function(){ return loadFiscal(); })
+      .then(function(){ render(); })
+      .catch(function(e){ alert(e.message||'Error al sembrar'); });
+  }
+
   // expose
   window.CeoDesk = { logout:logout, setFilter:function(f){state.listFilter=f;render();}, setHist:function(f){state.histFilter=f;render();},
     boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();}, boardKind:function(v){state.boardKind=v;render();}, boardLabel:function(v){state.boardLabel=v;render();},
@@ -995,7 +1201,8 @@
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
     gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect,
-    jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect };
+    jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect,
+    fiscalSetCountry:fiscalSetCountry, fiscalSetStatus:fiscalSetStatus, fiscalEdit:fiscalEdit, fiscalCancelEdit:fiscalCancelEdit, fiscalComply:fiscalComply, fiscalUndo:fiscalUndo, fiscalSaveBudget:fiscalSaveBudget, fiscalSeed:fiscalSeed };
 
   window.addEventListener('hashchange', function(){ if(state.user) render(); });
   boot();
