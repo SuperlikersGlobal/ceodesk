@@ -363,7 +363,7 @@
     nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route);
     if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
     nav += navItem('#/historial','🗂️','Historial', 0, route);
-    if(state.user.fin) nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
+    if(state.user.fin || state.user.role==='ceo') nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
 
     var view = renderRoute(route);
 
@@ -398,7 +398,7 @@
     if(route==='#/tablero') return viewBoard();
     if(route==='#/metricas') return viewMetrics();
     if(route==='#/historial') return viewHistory();
-    if(route==='#/fiscal') return state.user.fin ? viewFiscal() : { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">🔒</div><p>No tienes acceso a esta sección. Contacta al CEO si crees que deberías verla.</p></div>' };
+    if(route==='#/fiscal') return (state.user.fin || state.user.role==='ceo') ? viewFiscal() : { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">🔒</div><p>No tienes acceso a esta sección. Contacta al CEO si crees que deberías verla.</p></div>' };
     return viewInbox(); // #/bandeja para todos
   }
 
