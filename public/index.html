@@ -285,9 +285,13 @@
       var bin=atob(seg), bytes=new Uint8Array(bin.length);
       for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
       var p=JSON.parse(new TextDecoder('utf-8').decode(bytes)); // UTF-8 para nombres con tildes
-      return {email:p.u,name:p.name,role:p.role,title:p.title,sup:!!p.sup,fin:!!p.fin};
-    } catch(e){ return {email:'',name:'Usuario',role:'leader',title:'',sup:false,fin:false}; }
+      return {email:p.u,name:p.name,role:p.role,title:p.title,sup:!!p.sup,fin:!!p.fin,asst:Array.isArray(p.asst)?p.asst:[]};
+    } catch(e){ return {email:'',name:'Usuario',role:'leader',title:'',sup:false,fin:false,asst:[]}; }
   }
+  // ¿Soy asistente del destinatario de este ítem? (actúo en su nombre)
+  function iAssist(assigneeId){ var a=state.user&&state.user.asst; return !!a && a.indexOf(String(assigneeId||'').toLowerCase())>=0; }
+  // ¿Este ítem va a mi bandeja? (asignado a mí, o a alguien a quien asisto)
+  function isInboxItem(r,me){ return r.assigneeId===me || iAssist(r.assigneeId); }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
   function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
   function loadFiscal(){ return api('/fiscal').then(function(d){ state.fiscal = d.obligations||[]; state.fiscalLoaded=true; }).catch(function(){ state.fiscal=[]; state.fiscalLoaded=true; }); }
@@ -348,7 +352,7 @@
   function render(){
     if(!state.user){ showLogin(); return; }
     var me = state.user.email;
-    var inboxOpen = state.requests.filter(function(r){return r.assigneeId===me && isOpen(r.status);}).length;
+    var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).length;
     var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
     var route = location.hash || '#/bandeja';
 
@@ -506,7 +510,8 @@
 
   function viewInbox(){
     var me = state.user.email;
-    var open = state.requests.filter(function(r){return r.assigneeId===me && isOpen(r.status);}).sort(function(a,b){
+    var assisting = state.user.asst && state.user.asst.length;
+    var open = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).sort(function(a,b){
       if(a.dueDate&&b.dueDate&&a.dueDate!==b.dueDate) return a.dueDate<b.dueDate?-1:1;
       if(a.dueDate&&!b.dueDate) return -1; if(!a.dueDate&&b.dueDate) return 1;
       return prioRank(a.priority)-prioRank(b.priority);
@@ -520,8 +525,11 @@
     Object.keys(TYPE).forEach(function(t){ chips+='<button class="chip'+(f===t?' on':'')+'" onclick="CeoDesk.setFilter(\''+t+'\')">'+TYPE[t]+'</button>'; });
     var list = filtered.length ? '<div class="rows">'+filtered.map(requestRow).join('')+'</div>'
       : '<div class="empty"><div class="ic">🎉</div><p>No hay nada pendiente. Bandeja al día.</p></div>';
+    var lead = assisting
+      ? 'Lo que te asignaron y lo asignado a quien asistes: puedes actuar en su nombre para evacuarlo.'
+      : 'Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.';
     return { title:'Mi trabajo', html:
-      '<div class="phead"><h1>Mi trabajo</h1><p>Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.</p></div>'+
+      '<div class="phead"><h1>Mi trabajo</h1><p>'+lead+'</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
       '<div class="toolbar">'+chips+'</div>'+list+gtSection()+jiraSection() };
   }
@@ -716,7 +724,7 @@
   function viewDetail(id){
     var r = findReq(id);
     if(!r){ return { title:'Solicitud', html:'<div class="empty"><div class="ic">🔍</div><p>No encontramos esa solicitud.</p><a class="link" href="#/">Volver</a></div>' }; }
-    var isAssignee = r.assigneeId===state.user.email;
+    var isAssignee = r.assigneeId===state.user.email || iAssist(r.assigneeId);
     var isRequester = r.requesterId===state.user.email;
     var open=isOpen(r.status);
     // acciones del destinatario

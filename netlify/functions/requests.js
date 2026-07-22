@@ -6,7 +6,7 @@ import { listRequests, getRequest, saveRequest, nextCode } from './_lib/store.js
 import { buildRequest, REQUEST_TYPES, PRIORITIES, isDecisionType } from './_lib/lifecycle.js'
 import { canViewRequest, defaultAssignee } from './_lib/users.js'
 import { nameFor } from './_lib/org.js'
-import { notifyAssigneeNew } from './_lib/notify.js'
+import { notifyAssigneeNew, alertAssigneeUrgentWa } from './_lib/notify.js'
 
 // Rellena campos nuevos en ítems antiguos (destinatario, etiquetas).
 function normalize(r) {
@@ -94,9 +94,10 @@ export default async (req) => {
     const request = buildRequest(input, await nextCode(), requester, assignee)
     await saveRequest(request)
 
-    // Avisar por correo al destinatario (salvo que se lo asigne a sí mismo).
+    // Avisar al destinatario (salvo que se lo asigne a sí mismo).
     if (assigneeEmail !== String(requester.email || '').toLowerCase()) {
-      await notifyAssigneeNew(request)
+      await notifyAssigneeNew(request)                 // correo
+      if (request.priority === 'urgent') await alertAssigneeUrgentWa(request) // WhatsApp (SilvIA)
     }
 
     return json({ request }, 201)

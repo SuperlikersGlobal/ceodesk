@@ -62,6 +62,34 @@ export function delegatedRequestersFor(email) {
   return (Array.isArray(list) ? list : []).map((e) => String(e).toLowerCase())
 }
 
+// Asistentes personales: pueden VER y ACTUAR sobre lo asignado a su principal
+// (p. ej. la asistente del CEO ayuda a evacuar lo que le asignan al CEO).
+// ASSISTANTS = JSON { "principal": ["asistente1", ...] }.
+// Ej: {"luis@iwin.im":["sarah@iwin.im"]}
+export function assistantsMap() {
+  try { return JSON.parse(process.env.ASSISTANTS || '{}') } catch { return {} }
+}
+// Asistentes de un principal (correos que actúan en su nombre).
+export function assistantsOf(principal) {
+  const map = assistantsMap()
+  const key = Object.keys(map).find((k) => k.toLowerCase() === String(principal || '').toLowerCase())
+  const list = key ? map[key] : []
+  return (Array.isArray(list) ? list : []).map((e) => String(e).toLowerCase())
+}
+// Principales a los que asiste este usuario (para quién puede actuar).
+export function principalsFor(assistant) {
+  const me = String(assistant || '').toLowerCase()
+  const map = assistantsMap()
+  return Object.keys(map).filter((p) => assistantsOf(p).includes(me)).map((p) => p.toLowerCase())
+}
+// ¿Puede este usuario actuar como el DESTINATARIO de esta solicitud?
+// (es el destinatario, o es asistente del destinatario)
+export function actsAsAssignee(user, request) {
+  const me = emailOf(user)
+  const assignee = assigneeOf(request)
+  return me === assignee || principalsFor(me).includes(assignee)
+}
+
 // ¿Puede este usuario VER esta solicitud?
 //   - Solicitante o destinatario: siempre.
 //   - CEO: todo.
@@ -76,6 +104,7 @@ export function canViewRequest(user, request) {
   if (me === requester || me === assignee) return true
   if (isCeo(user)) return true
   if (isChiefOfStaff(me) && ceoEmails().includes(assignee)) return true
+  if (principalsFor(me).includes(assignee)) return true // asistente del destinatario
   if (isAncestor(me, requester) || isAncestor(me, assignee)) return true
   if (delegatedRequestersFor(me).includes(requester)) return true
   return false

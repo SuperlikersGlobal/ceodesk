@@ -6,7 +6,7 @@
 import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
 import { applyAction, isOpen, isValidAction, isActionAllowedForType, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
-import { canViewRequest, assigneeOf, emailOf } from './_lib/users.js'
+import { canViewRequest, assigneeOf, emailOf, principalsFor } from './_lib/users.js'
 import { notifyRequesterAttended } from './_lib/notify.js'
 
 export default async (req) => {
@@ -28,7 +28,8 @@ export default async (req) => {
   }
 
   const me = emailOf(u)
-  const isAssignee = assigneeOf(request) === me
+  // El destinatario, o su asistente personal, pueden actuar como destinatario.
+  const isAssignee = assigneeOf(request) === me || principalsFor(me).includes(assigneeOf(request))
   const isRequester = String(request.requesterId).toLowerCase() === me
 
   // Control de acceso por tipo de acción
