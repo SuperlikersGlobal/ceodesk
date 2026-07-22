@@ -31,6 +31,9 @@ Producción: **https://ceodesk.superlikers.com**
   su ítem; un **líder ve lo que su equipo envía y lo que le asignan** (transitivo,
   todo su subárbol); el **Chief of Staff** ve todo lo asignado al CEO; el **CEO**
   ve todo. Más delegaciones manuales.
+- **Asistente personal.** Un asistente (p. ej. la asistente del CEO) **ve y puede
+  actuar** sobre lo asignado a su principal, para ayudar a evacuar tareas en su
+  nombre. La auditoría registra quién actuó de verdad.
 - **Áreas/Proyecto** y **Etiquetas** libres (con autocompletado) para clasificar
   y filtrar de forma transversal.
 - **Tablero Kanban** (Tareas e Incidencias) con **arrastrar y soltar**, filtros
@@ -45,6 +48,9 @@ Producción: **https://ceodesk.superlikers.com**
   - Cuando **otra persona atiende una solicitud tuya** (la aprueba, firma, resuelve,
     comenta, pide info, etc.), el **solicitante** recibe el aviso.
   - No hay auto-notificación (si actúas sobre lo tuyo, no te llega correo).
+- **Aviso por WhatsApp (SilvIA).** Cuando te asignan algo marcado **Urgente**, se
+  te avisa por WhatsApp (usando la plantilla aprobada de SilvIA del CRM). Solo a
+  quienes tengan teléfono configurado.
 - **Jira (espejo vivo, por usuario):** cualquier miembro puede **Conectar Jira**
   ("Conéctate con Atlassian", OAuth 2.0 3LO) y ver en "Mi trabajo" sus **issues
   asignados**, siempre al día (estado y datos reflejados desde Jira, con enlace al
@@ -97,7 +103,8 @@ netlify/functions/
   _lib/google-tasks.js            integración Google Tasks (formato notes, huella, · meta)
   _lib/jira.js                    integración Jira (OAuth 3LO, mapeo de estados, proyección)
   _lib/mailer.js                  envío SMTP (nodemailer, carga perezosa)
-  _lib/notify.js                  avisos: asignación nueva y solicitud atendida
+  _lib/wa.js                      avisos por WhatsApp (SilvIA / WhatsApp Cloud API)
+  _lib/notify.js                  avisos: asignación nueva, atendida y urgente (WhatsApp)
   _lib/notify-template.js         plantillas (puras) de los correos
   _lib/store.js                   Netlify Blobs (con fallback en memoria para tests)
   _lib/users.js                   alta por Google, roles, Chief of Staff, visibilidad
@@ -120,7 +127,11 @@ netlify.toml                      publish=public, /api/* -> funciones, SPA fallb
 | `ORG` | Organigrama, JSON `{ "correo": { "n": "Nombre", "l": "correo_del_jefe" }, ... }`. La raíz tiene `"l": null`. **Contiene PII: solo en variable de entorno, nunca en el repo (que es público).** |
 | `AREAS` | Lista de áreas/proyectos, coma-separada (ej. `Producto,Desarrollo,Diseño,…`). |
 | `VIEWER_DELEGATIONS` | Delegaciones extra de visibilidad, JSON `{ "correo_delegado": ["correo1", …] }`. |
+| `ASSISTANTS` | Asistentes personales, JSON `{ "principal": ["asistente", …] }`. El asistente ve y actúa sobre lo asignado a su principal. |
 | `USER_TITLES` | (Opcional) JSON `{ "correo": "Cargo" }`. |
+| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` | (Opcional) WhatsApp Cloud API para avisos de urgentes (reutilizables del CRM). `WHATSAPP_TOKEN` es **secreto**. |
+| `SILVIA_TPL_AVISO` | (Opcional) Plantilla aprobada para el aviso (por defecto `silvia_aviso`). Params `[de, mensaje]`. |
+| `WA_ALERT_PHONES` | (Opcional) Teléfonos a avisar, JSON `{ "correo": "573…" }`. Alternativa: reutilizar `WHATSAPP_USERS` del CRM. |
 | `GOOGLE_SA_CLIENT_EMAIL` | (Opcional) Cuenta de servicio para Google Tasks. Se puede reutilizar la del CRM. |
 | `GOOGLE_SA_PRIVATE_KEY` | (Opcional) Clave privada de la cuenta de servicio (con `\n` escapados). **Secreto.** |
 | `GOOGLE_TASKS_IMPERSONATE` | (Opcional) Cuenta de Workspace a impersonar (dueña del hub). Por defecto, el 1er CEO. |
