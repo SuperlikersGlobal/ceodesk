@@ -25,6 +25,10 @@ Producción: **https://ceodesk.superlikers.com**
   | **Decisión** | Pendiente → Resuelta |
   | **Lectura** | Pendiente → Leída |
   El detalle muestra las acciones correctas por tipo (una tarea se *empieza/marca hecha*, no se *aprueba*).
+- **Posponer.** El destinatario puede **posponer** un ítem mientras espera una
+  respuesta o que se cumplan condiciones; pasa a una sección **"Pospuestas"** (no
+  cuenta como pendiente) y se **reactiva** manualmente o solo cuando llega la
+  respuesta. Al resolver/posponer, se confirma con un aviso y se vuelve al listado.
 - **Debido proceso** sólo donde toca: las decisiones exigen contexto +
   recomendación + impacto; las tareas/incidencias solo título + descripción.
 - **Visibilidad por organigrama.** El solicitante y el destinatario siempre ven

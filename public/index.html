@@ -118,6 +118,10 @@
   .gt-card .gt-meta{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .gt-card .gt-act{display:flex;gap:7px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
   .gt-card .gt-act .btn{padding:7px 12px;font-size:12.5px}
+  #toasts{position:fixed;right:18px;bottom:18px;z-index:1000;display:flex;flex-direction:column;gap:10px}
+  .toast{background:var(--ink);color:var(--surface);padding:12px 16px;border-radius:10px;font-size:13.5px;font-weight:650;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:340px}
+  .toast--in{opacity:1;transform:none} .toast--out{opacity:0;transform:translateY(8px)}
+  .toast--ok{background:var(--green);color:#04201a} .toast--err{background:var(--red);color:#fff}
   .badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
   .badge.bdot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
   .b-green{background:var(--green-soft);color:var(--green)} .b-red{background:var(--red-soft);color:var(--red)}
@@ -227,7 +231,7 @@
   var PRIO = { low:'Baja', medium:'Media', high:'Alta', urgent:'Urgente' };
   var PRIO_COLOR = { low:'var(--slate)', medium:'var(--blue)', high:'var(--amber)', urgent:'var(--red)' };
   var OPEN = ['pending','in_review','info_requested','todo','doing','blocked','open','resolved'];
-  var EVENT = { created:'creó el ítem', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', read:'marcó como leída', started:'empezó', completed:'completó', blocked:'bloqueó', resumed:'reanudó', resolved:'resolvió', closed:'cerró', reopened:'reabrió', cancelled:'canceló' };
+  var EVENT = { created:'creó el ítem', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', read:'marcó como leída', started:'empezó', completed:'completó', blocked:'bloqueó', resumed:'reanudó', resolved:'resolvió', closed:'cerró', reopened:'reabrió', cancelled:'canceló', snoozed:'pospuso', reactivated:'reactivó' };
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
@@ -379,7 +383,7 @@
   function render(){
     if(!state.user){ showLogin(); return; }
     var me = state.user.email;
-    var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).length;
+    var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && !r.snoozedAt;}).length;
     var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
     var inboxNews = state.requests.some(function(r){return (isInboxItem(r,me) || (r.watchers&&r.watchers.indexOf(me)>=0)) && hasNews(r);});
     var mineNews = state.requests.some(function(r){return r.requesterId===me && hasNews(r);});
@@ -449,6 +453,7 @@
     var assistTag = forPrincipal ? '<span class="badge b-brand bdot">En nombre de '+esc((r.assigneeName||'').split(' ')[0])+'</span>' : '';
     var isW = me && r.assigneeId!==me && r.requesterId!==me && r.watchers && r.watchers.indexOf(me)>=0;
     var watchTag = isW ? '<span class="badge b-slate">👀 Informador</span>' : '';
+    var snoozeTag = r.snoozedAt ? '<span class="badge b-amber">⏸ Pospuesta</span>' : '';
     var news = hasNews(r) ? '<span class="newsdot" title="Novedad sin ver"></span>' : '';
     return '<a class="row'+(forPrincipal?' row--assist':'')+'" href="#/solicitud/'+encodeURIComponent(r.id)+'">'+
       '<span class="prio" style="background:'+PRIO_COLOR[r.priority]+'"></span>'+
@@ -457,7 +462,7 @@
         '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
         (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+
         (r.labels&&r.labels.length?'<span>·</span>'+labelChips(r):'')+'</span></span>'+
-      '<span class="rside">'+assistTag+watchTag+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
+      '<span class="rside">'+assistTag+watchTag+snoozeTag+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
   }
   function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
 
@@ -553,7 +558,7 @@
   function viewInbox(){
     var me = state.user.email;
     var assisting = state.user.asst && state.user.asst.length;
-    var open = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).sort(function(a,b){
+    var open = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && !r.snoozedAt;}).sort(function(a,b){
       if(a.dueDate&&b.dueDate&&a.dueDate!==b.dueDate) return a.dueDate<b.dueDate?-1:1;
       if(a.dueDate&&!b.dueDate) return -1; if(!a.dueDate&&b.dueDate) return 1;
       return prioRank(a.priority)-prioRank(b.priority);
@@ -570,6 +575,14 @@
     var lead = assisting
       ? 'Lo que te asignaron y lo asignado a quien asistes: puedes actuar en su nombre para evacuarlo.'
       : 'Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.';
+    // Pospuestas: ítems de mi bandeja en espera (no cuentan como pendientes).
+    var snoozed = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && r.snoozedAt;})
+      .sort(function(a,b){return a.snoozedAt<b.snoozedAt?1:-1;});
+    var snoozedSec = snoozed.length
+      ? '<div class="rowlbl" style="margin-top:26px">Pospuestas · '+snoozed.length+
+        ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— en espera de una respuesta o de que se cumplan condiciones</span></div>'+
+        '<div class="rows">'+snoozed.map(requestRow).join('')+'</div>'
+      : '';
     // Ítems que sigo como informador (solo lectura, no cuentan como pendientes).
     var watched = state.requests.filter(function(r){return r.assigneeId!==me && r.requesterId!==me && r.watchers && r.watchers.indexOf(me)>=0;})
       .sort(function(a,b){return a.updatedAt<b.updatedAt?1:-1;});
@@ -581,7 +594,7 @@
     return { title:'Mi trabajo', html:
       '<div class="phead"><h1>Mi trabajo</h1><p>'+lead+'</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
-      '<div class="toolbar">'+chips+'</div>'+list+watchedSec+jiraSection() };
+      '<div class="toolbar">'+chips+'</div>'+list+snoozedSec+watchedSec+jiraSection() };
   }
   // Google Tasks en su propia pestaña (separado de las solicitudes de CeoDesk).
   function viewGoogleTasks(){
@@ -807,6 +820,8 @@
       } else {
         A=[['approve','Aprobar','btn--green'],['request_info','Pedir más información','btn--primary'],['reject','Rechazar','btn--red']];
       }
+      // Posponer / Reactivar: gestión de bandeja, para cualquier tipo.
+      A.push(r.snoozedAt ? ['unsnooze','Reactivar','btn--primary'] : ['snooze','Posponer','']);
       if(A.length){
         var heading=(DECISION_TYPES.indexOf(r.type)>=0)?'Tu decisión':'Acciones';
         var btns=A.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
@@ -953,32 +968,48 @@
     block:{ title:'Bloquear', sub:'Explica qué lo bloquea.', cta:'Bloquear', cls:'btn--red', requireNote:true },
     resolve:{ title:'Marcar resuelta', sub:'Describe brevemente cómo se resolvió.', cta:'Resolver', cls:'btn--green' },
     start:{ direct:true }, complete:{ direct:true }, resume:{ direct:true }, mark_read:{ direct:true },
-    close:{ direct:true }, reopen:{ direct:true }
+    close:{ direct:true }, reopen:{ direct:true },
+    snooze:{ title:'Posponer', sub:'La tarea pasa a "Pospuestas" hasta que la reactives o llegue una respuesta.', cta:'Posponer', cls:'' },
+    unsnooze:{ direct:true }
   };
+  // Acciones que "cierran" el trabajo en el detalle: confirman y vuelven al listado.
+  var RESOLVING = { approve:'Aprobada', reject:'Rechazada', sign:'Firmada', mark_read:'Marcada como leída',
+    complete:'Marcada como hecha', resolve:'Resuelta', close:'Cerrada', cancel:'Cancelada',
+    snooze:'Pospuesta', unsnooze:'Reactivada' };
+  // Tras una acción: confirma con toast y, si resuelve/pospone, vuelve al listado.
+  function afterAction(id, action){
+    var r=findReq(id); var word=RESOLVING[action];
+    if(word){
+      toast('✓ '+(r?r.code+' · ':'')+word, 'ok');
+      var me=state.user.email;
+      var dest=(r && r.requesterId===me && r.assigneeId!==me) ? '#/mis' : '#/bandeja';
+      if(location.hash===dest) render(); else location.hash=dest;
+    } else { render(); }
+  }
   function act(id, action){
     var m=ACT_META[action]||{}; var r=findReq(id);
     if(m.direct){
       api('/request-action',{method:'POST',body:{id:id,action:action}}).then(function(){ return loadRequests(); })
-        .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+        .then(function(){ afterAction(id, action); }).catch(function(e){ toast(e.message,'err'); });
       return;
     }
     openModal(m.title+(r?' · '+r.code:''), m.sub, m.cta, m.cls, m.requireNote, function(note, close){
       api('/request-action',{method:'POST',body:{id:id,action:action,note:note,mentions:Mention.emails('modal-note')}}).then(function(){
         return loadRequests();
-      }).then(function(){ close(); render(); }).catch(function(e){ close(); toast(e.message); });
+      }).then(function(){ close(); afterAction(id, action); }).catch(function(e){ close(); toast(e.message,'err'); });
     });
   }
   function respond(id){
     var box=document.getElementById('respond-box'); var note=(box&&box.value||'').trim();
     if(!note){ box.focus(); return; }
     api('/request-action',{method:'POST',body:{id:id,action:'provide_info',note:note,mentions:Mention.emails('respond-box')}}).then(function(){ return loadRequests(); })
-      .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+      .then(function(){ toast('✓ Respuesta enviada','ok'); render(); }).catch(function(e){ toast(e.message,'err'); });
   }
   function comment(id){
     var box=document.getElementById('comment-box'); var note=(box&&box.value||'').trim();
     if(!note){ box.focus(); return; }
     api('/request-action',{method:'POST',body:{id:id,action:'comment',note:note,mentions:Mention.emails('comment-box')}}).then(function(){ return loadRequests(); })
-      .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+      .then(function(){ toast('✓ Comentario agregado','ok'); render(); }).catch(function(e){ toast(e.message,'err'); });
   }
 
   // Nombre legible de un correo (roster), o el correo si no se encuentra.
@@ -1032,7 +1063,14 @@
       onConfirm(note, close);
     });
   }
-  function toast(msg){ alert(msg); }
+  function toast(msg, type){
+    var c=document.getElementById('toasts');
+    if(!c){ c=document.createElement('div'); c.id='toasts'; document.body.appendChild(c); }
+    var t=document.createElement('div'); t.className='toast'+(type==='ok'?' toast--ok':(type==='err'?' toast--err':''));
+    t.textContent=msg; c.appendChild(t);
+    setTimeout(function(){ t.classList.add('toast--in'); },10);
+    setTimeout(function(){ t.classList.add('toast--out'); setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); },300); }, 3400);
+  }
 
   // ---------- menu (mobile) ----------
   // ---- acciones Google Tasks ----
@@ -1120,7 +1158,9 @@
   function entityBadges(ids){
     return (ids||[]).map(function(e){ return '<span class="badge b-slate" style="font-size:11px">'+esc(ENTITY_LABEL[e]||e)+'</span>'; }).join(' ');
   }
-  function fmtDate(s){ if(!s) return '—'; var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+  // Fecha corta para el módulo fiscal (recibe "YYYY-MM-DD"). Nombre propio para
+  // NO pisar el fmtDate global (que formatea ISO en el resto de la app).
+  function fmtDay(s){ if(!s) return '—'; var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
   function fmtUsd(v){ if(v==null||v==='') return ''; return '$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
   function fiscalDayColor(obs, today){
     var hasOverdue=false, hasUpcoming=false, hasComplied=false;
@@ -1153,8 +1193,8 @@
     html += entityBadges(o.entity_ids);
     html += fiscalTypeBadge(o.obligation_type);
     html += '<span class="badge b-slate">'+(FREQ_LABEL[o.frequency]||o.frequency)+'</span>';
-    html += '<span style="color:var(--muted);font-size:12px">Vence: <b>'+fmtDate(o.due_date)+'</b></span>';
-    if(o.compliance_date) html += '<span style="color:var(--green);font-size:12px">Cumplida: '+fmtDate(o.compliance_date)+'</span>';
+    html += '<span style="color:var(--muted);font-size:12px">Vence: <b>'+fmtDay(o.due_date)+'</b></span>';
+    if(o.compliance_date) html += '<span style="color:var(--green);font-size:12px">Cumplida: '+fmtDay(o.compliance_date)+'</span>';
     html += '</div>';
     if(o.notes) html += '<div style="color:var(--muted);font-size:12px;margin-top:4px">'+esc(o.notes.slice(0,120))+'</div>';
     html += '</div>';
