@@ -1,7 +1,7 @@
 // Notificaciones por correo. De momento: avisar al SOLICITANTE cuando su
 // solicitud fue atendida por otra persona (el destinatario u otro con acceso).
 import { sendMail, mailerConfigured } from './mailer.js'
-import { buildActivityEmail, buildAssignedEmail, typeLabelFor } from './notify-template.js'
+import { buildActivityEmail, buildAssignedEmail, buildWatcherEmail, typeLabelFor } from './notify-template.js'
 import { notifyByWhatsApp, waEnabled } from './wa.js'
 
 // Avisa a UNA persona sobre actividad en un ítem (comentario, respuesta, decisión).
@@ -29,6 +29,18 @@ export async function alertAssigneeUrgentWa(request) {
     const tipo = typeLabelFor(request.type)
     const msg = `${who} te asignó ${tipo} URGENTE: "${request.title}" (${request.code}).`
     return await notifyByWhatsApp(to, msg)
+  } catch (e) {
+    return { ok: false, reason: 'error', detail: String(e && e.message || e).slice(0, 160) }
+  }
+}
+
+// Avisa a un INFORMADOR que lo sumaron a una solicitud. Best-effort.
+export async function notifyWatcherAdded(to, request) {
+  try {
+    if (!mailerConfigured()) return { ok: false, reason: 'not_configured' }
+    if (!to) return { ok: false, reason: 'no_recipient' }
+    const { subject, text, html } = buildWatcherEmail(request)
+    return await sendMail({ to, subject, text, html })
   } catch (e) {
     return { ok: false, reason: 'error', detail: String(e && e.message || e).slice(0, 160) }
   }

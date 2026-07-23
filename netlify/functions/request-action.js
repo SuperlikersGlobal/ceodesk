@@ -7,7 +7,22 @@ import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
 import { applyAction, isOpen, isValidAction, isActionAllowedForType, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
 import { canViewRequest, assigneeOf, emailOf, principalsFor } from './_lib/users.js'
+import { nameFor } from './_lib/org.js'
 import { notifyActivity } from './_lib/notify.js'
+
+// Menciones (@): correos válidos (conocidos), sin duplicados, sin el actor. Acotado.
+function cleanMentions(v, exclude) {
+  if (!Array.isArray(v)) return []
+  const ex = new Set((exclude || []).map((e) => String(e || '').toLowerCase()))
+  const seen = new Set(); const out = []
+  for (const x of v) {
+    const e = String(x || '').trim().toLowerCase()
+    if (!e || ex.has(e) || seen.has(e) || !nameFor(e)) continue
+    seen.add(e); out.push(e)
+    if (out.length >= 10) break
+  }
+  return out
+}
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
@@ -50,21 +65,36 @@ export default async (req) => {
 
   const actor = { email: u.u, name: u.name }
   const updated = applyAction(request, action, actor, (note || '').trim() || null)
+
+  // Menciones (@) en el comentario/nota: se suman como informadores del ítem.
+  const mentions = cleanMentions(body.mentions, [me])
+  if (mentions.length) {
+    const set = new Set([...(Array.isArray(updated.watchers) ? updated.watchers : []).map((x) => String(x).toLowerCase()), ...mentions])
+    updated.watchers = [...set]
+  }
   await saveRequest(updated)
 
-  // Avisar por correo a la OTRA parte del ítem (bidireccional): si el destinatario
-  // actúa, se avisa al solicitante; si el solicitante responde/comenta, se avisa al
-  // destinatario. No se auto-notifica (ni al actor ni a quien actúa en su nombre).
+  // Avisar por correo a TODAS las partes interesadas del ítem, cada una con su rol:
+  // solicitante, destinatario, informadores y mencionados. No se auto-notifica
+  // (ni al actor ni a quien actúa en su nombre). La mención tiene prioridad de rol.
   const evt = updated.events[updated.events.length - 1]
-  const requesterId = String(updated.requesterId || '').toLowerCase()
-  const assigneeId = assigneeOf(updated)
+  const eventType = evt && evt.type
+  const cleanNote = (note || '').trim() || null
+  const mentionSet = new Set(mentions)
   const exclude = new Set([me, ...principalsFor(me)])
-  const recipients = [
-    { to: requesterId, role: 'requester' },
-    { to: assigneeId, role: 'assignee' },
-  ].filter((r) => r.to && !exclude.has(r.to))
-  for (const r of recipients) {
-    await notifyActivity(r.to, updated, evt && evt.type, actor.name, (note || '').trim() || null, r.role)
+  const byEmail = new Map()
+  const add = (email, role) => {
+    const e = String(email || '').toLowerCase()
+    if (!e || exclude.has(e) || byEmail.has(e)) return
+    byEmail.set(e, role)
+  }
+  add(String(updated.requesterId || '').toLowerCase(), 'requester')
+  add(assigneeOf(updated), 'assignee')
+  for (const w of (Array.isArray(updated.watchers) ? updated.watchers : [])) {
+    add(String(w).toLowerCase(), mentionSet.has(String(w).toLowerCase()) ? 'mention' : 'watcher')
+  }
+  for (const [email, role] of byEmail) {
+    await notifyActivity(email, updated, eventType, actor.name, cleanNote, role)
   }
 
   return json({ request: updated })

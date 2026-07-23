@@ -199,6 +199,10 @@
   .taginput .lbl{background:var(--brand-soft);color:var(--brand-ink);font-size:12.5px;padding:3px 8px}
   .taginput .lbl b{cursor:pointer;font-weight:800;opacity:.6;margin-left:1px}
   .taginput input{border:0;outline:0;flex:1;min-width:120px;font-size:13.5px;background:transparent;color:var(--ink)}
+  .mbox{position:relative}
+  .mentions{position:absolute;left:0;right:0;z-index:40;background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;box-shadow:var(--shadow);margin-top:4px;overflow:hidden;max-height:220px;overflow-y:auto}
+  .mentions__item{padding:8px 12px;font-size:13.5px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+  .mentions__item:hover{background:var(--surface-2)} .mentions__item span{color:var(--faint);font-size:12px}
   .menu-btn{display:none}
   @media (max-width:900px){.split{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.typegrid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
   @media (max-width:720px){
@@ -377,7 +381,7 @@
     var me = state.user.email;
     var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).length;
     var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
-    var inboxNews = state.requests.some(function(r){return isInboxItem(r,me) && hasNews(r);});
+    var inboxNews = state.requests.some(function(r){return (isInboxItem(r,me) || (r.watchers&&r.watchers.indexOf(me)>=0)) && hasNews(r);});
     var mineNews = state.requests.some(function(r){return r.requesterId===me && hasNews(r);});
     var route = location.hash || '#/bandeja';
 
@@ -443,6 +447,8 @@
     // Marca los ítems que son de mi principal (los que atiendo en su nombre).
     var forPrincipal = me && r.assigneeId!==me && iAssist(r.assigneeId);
     var assistTag = forPrincipal ? '<span class="badge b-brand bdot">En nombre de '+esc((r.assigneeName||'').split(' ')[0])+'</span>' : '';
+    var isW = me && r.assigneeId!==me && r.requesterId!==me && r.watchers && r.watchers.indexOf(me)>=0;
+    var watchTag = isW ? '<span class="badge b-slate">👀 Informador</span>' : '';
     var news = hasNews(r) ? '<span class="newsdot" title="Novedad sin ver"></span>' : '';
     return '<a class="row'+(forPrincipal?' row--assist':'')+'" href="#/solicitud/'+encodeURIComponent(r.id)+'">'+
       '<span class="prio" style="background:'+PRIO_COLOR[r.priority]+'"></span>'+
@@ -451,7 +457,7 @@
         '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
         (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+
         (r.labels&&r.labels.length?'<span>·</span>'+labelChips(r):'')+'</span></span>'+
-      '<span class="rside">'+assistTag+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
+      '<span class="rside">'+assistTag+watchTag+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
   }
   function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
 
@@ -564,10 +570,18 @@
     var lead = assisting
       ? 'Lo que te asignaron y lo asignado a quien asistes: puedes actuar en su nombre para evacuarlo.'
       : 'Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.';
+    // Ítems que sigo como informador (solo lectura, no cuentan como pendientes).
+    var watched = state.requests.filter(function(r){return r.assigneeId!==me && r.requesterId!==me && r.watchers && r.watchers.indexOf(me)>=0;})
+      .sort(function(a,b){return a.updatedAt<b.updatedAt?1:-1;});
+    var watchedSec = watched.length
+      ? '<div class="rowlbl" style="margin-top:26px">Sigues como informador · '+watched.length+
+        ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— te enteras de la actividad, sin tener que actuar</span></div>'+
+        '<div class="rows">'+watched.map(requestRow).join('')+'</div>'
+      : '';
     return { title:'Mi trabajo', html:
       '<div class="phead"><h1>Mi trabajo</h1><p>'+lead+'</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
-      '<div class="toolbar">'+chips+'</div>'+list+jiraSection() };
+      '<div class="toolbar">'+chips+'</div>'+list+watchedSec+jiraSection() };
   }
   // Google Tasks en su propia pestaña (separado de las solicitudes de CeoDesk).
   function viewGoogleTasks(){
@@ -735,6 +749,7 @@
     var after=function(){ NewForm.mount(); };
     var rosterOpts = '<option value="" disabled selected>Elige a la persona…</option>'+
       state.roster.map(function(p){ return '<option value="'+esc(p.email)+'">'+esc(p.name)+' — '+esc(p.email)+'</option>'; }).join('');
+    var watcherOpts = state.roster.map(function(p){ return '<option value="'+esc(p.email)+'">'+esc(p.name)+'</option>'; }).join('');
     var areaOpts = ((state.config&&state.config.areas)||[]).map(function(a){ return '<option>'+esc(a)+'</option>'; }).join('');
     var labelDatalist = allLabels().map(function(l){ return '<option value="'+esc(l)+'"></option>'; }).join('');
     return { title:'Nueva solicitud', after:after, html:
@@ -744,6 +759,7 @@
           Object.keys(TYPE).map(function(t){ return '<button type="button" class="topt'+(t==='task'?' on':'')+'" data-type="'+t+'"><span class="ti">'+TYPE_ICON[t]+'</span>'+TYPE[t]+'</button>'; }).join('')+
         '</div></div>'+
         '<div class="field"><label for="f-to">¿A quién se lo pides? *</label><div class="hint">Cualquier persona de Superlikers.</div><select id="f-to" class="sel">'+rosterOpts+'</select></div>'+
+        '<div class="field"><label for="f-watchers">Informar también a (opcional)</label><div class="hint">Otras personas que se enterarán de cualquier respuesta o decisión. Ctrl/Cmd para elegir varias.</div><select id="f-watchers" class="sel" multiple size="4">'+watcherOpts+'</select></div>'+
         '<div class="field"><label for="f-title">Título *</label><input id="f-title" class="inp" maxlength="120" placeholder="Ej. Contrato de alianza con RappiPay"></div>'+
         '<div class="two"><div class="field"><label for="f-prio">Prioridad</label><select id="f-prio" class="sel">'+
           Object.keys(PRIO).map(function(p){return '<option value="'+p+'"'+(p==='medium'?' selected':'')+'>'+PRIO[p]+'</option>';}).join('')+'</select></div>'+
@@ -831,7 +847,7 @@
     }).join('');
     var commentCard = (isAssignee || isRequester)
       ? '<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Añadir comentario</h3>'+
-          '<textarea class="ta" id="comment-box" placeholder="Escribe una nota para el hilo…"></textarea>'+
+          '<textarea class="ta" id="comment-box" placeholder="Escribe una nota para el hilo… Usa @ para mencionar a alguien y avisarle."></textarea>'+
           '<div style="margin-top:10px"><button class="btn" onclick="CeoDesk.comment(\''+r.id+'\')">Comentar</button></div></div>'
       : '';
     var html=
@@ -850,12 +866,13 @@
         '<div class="card" style="padding:18px">'+
           kv('Solicita', avatar(r.requesterName,24)+' '+esc(r.requesterName), true)+
           kv('Para', avatar(r.assigneeName||'',24)+' '+esc(r.assigneeName||''), true)+
+          (r.watchers&&r.watchers.length?kv('Informadores', esc(r.watchers.map(personName).join(', '))):'')+
           (r.requesterTitle?kv('Cargo',esc(r.requesterTitle)):'')+
           kv('Tipo',TYPE[r.type])+(r.area?kv('Área',esc(r.area)):'')+kv('Creada',fmtDate(r.createdAt))+kv('Fecha límite',dueBadge(r.dueDate))+
         '</div>'+
         '<div class="card" style="padding:18px;margin-top:16px"><div class="rowlbl" style="margin-top:0">Historial</div><div class="tl">'+tl+'</div></div>'+
       '</div></div>';
-    return { title:'Detalle · '+r.code, html:html };
+    return { title:'Detalle · '+r.code, html:html, after:function(){ Mention.attach('comment-box'); Mention.attach('respond-box'); } };
   }
   function kv(k,v,raw){ return '<div class="kv"><span class="k">'+k+'</span><span class="v" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'+v+'</span></div>'; }
 
@@ -904,8 +921,10 @@
     },
     submit:function(){
       var g=function(id){return document.getElementById(id).value.trim();};
+      var wsel=document.getElementById('f-watchers');
+      var watchers=wsel?Array.prototype.slice.call(wsel.selectedOptions).map(function(o){return o.value;}):[];
       var body={ type:NewForm.type, title:g('f-title'), assigneeId:document.getElementById('f-to').value, priority:document.getElementById('f-prio').value,
-        area:document.getElementById('f-area').value, labels:NewForm.labels.slice(),
+        area:document.getElementById('f-area').value, labels:NewForm.labels.slice(), watchers:watchers,
         context:g('f-ctx'), recommendation:g('f-rec'), impact:g('f-imp'),
         documentName:g('f-doc'), documentUrl:g('f-url'), documentVersion:g('f-ver'),
         dueDate: document.getElementById('f-due').value ? new Date(document.getElementById('f-due').value).toISOString() : null };
@@ -944,7 +963,7 @@
       return;
     }
     openModal(m.title+(r?' · '+r.code:''), m.sub, m.cta, m.cls, m.requireNote, function(note, close){
-      api('/request-action',{method:'POST',body:{id:id,action:action,note:note}}).then(function(){
+      api('/request-action',{method:'POST',body:{id:id,action:action,note:note,mentions:Mention.emails('modal-note')}}).then(function(){
         return loadRequests();
       }).then(function(){ close(); render(); }).catch(function(e){ close(); toast(e.message); });
     });
@@ -952,15 +971,48 @@
   function respond(id){
     var box=document.getElementById('respond-box'); var note=(box&&box.value||'').trim();
     if(!note){ box.focus(); return; }
-    api('/request-action',{method:'POST',body:{id:id,action:'provide_info',note:note}}).then(function(){ return loadRequests(); })
+    api('/request-action',{method:'POST',body:{id:id,action:'provide_info',note:note,mentions:Mention.emails('respond-box')}}).then(function(){ return loadRequests(); })
       .then(function(){ render(); }).catch(function(e){ toast(e.message); });
   }
   function comment(id){
     var box=document.getElementById('comment-box'); var note=(box&&box.value||'').trim();
     if(!note){ box.focus(); return; }
-    api('/request-action',{method:'POST',body:{id:id,action:'comment',note:note}}).then(function(){ return loadRequests(); })
+    api('/request-action',{method:'POST',body:{id:id,action:'comment',note:note,mentions:Mention.emails('comment-box')}}).then(function(){ return loadRequests(); })
       .then(function(){ render(); }).catch(function(e){ toast(e.message); });
   }
+
+  // Nombre legible de un correo (roster), o el correo si no se encuentra.
+  function personName(email){ var e=String(email||'').toLowerCase(); var p=(state.roster||[]).find(function(x){return String(x.email).toLowerCase()===e;}); return p?p.name:email; }
+
+  // ---------- menciones con @ en un textarea ----------
+  var Mention = {
+    boxes:{}, // id -> { emails: {email:name} }
+    attach:function(taId){
+      var ta=document.getElementById(taId); if(!ta) return;
+      Mention.boxes[taId]={ emails:{} };
+      if(ta.parentNode.className!=='mbox'){ var wrap=document.createElement('span'); wrap.className='mbox'; wrap.style.display='block'; ta.parentNode.insertBefore(wrap,ta); wrap.appendChild(ta); }
+      var box=document.createElement('div'); box.className='mentions'; box.style.display='none'; ta.parentNode.appendChild(box);
+      function query(){ var upto=ta.value.slice(0,ta.selectionStart); var m=upto.match(/@([\p{L}0-9._-]*)$/u); return m?{q:m[1],start:ta.selectionStart-m[0].length}:null; }
+      function hide(){ box.style.display='none'; box.innerHTML=''; }
+      function show(q){
+        var ql=q.toLowerCase();
+        var ms=(state.roster||[]).filter(function(p){ return String(p.name||'').toLowerCase().indexOf(ql)>=0 || String(p.email||'').toLowerCase().indexOf(ql)>=0; }).slice(0,6);
+        if(!ms.length){ hide(); return; }
+        box.innerHTML=ms.map(function(p){ return '<div class="mentions__item" data-email="'+esc(p.email)+'" data-name="'+esc(p.name)+'">'+esc(p.name)+' <span>'+esc(p.email)+'</span></div>'; }).join('');
+        box.style.display='block';
+      }
+      ta.addEventListener('input',function(){ var c=query(); if(c) show(c.q); else hide(); });
+      ta.addEventListener('blur',function(){ setTimeout(hide,150); });
+      box.addEventListener('mousedown',function(e){
+        var it=e.target.closest?e.target.closest('.mentions__item'):null; if(!it) return; e.preventDefault();
+        var c=query(); if(!c) return;
+        var name=it.getAttribute('data-name'), email=it.getAttribute('data-email');
+        ta.value=ta.value.slice(0,c.start)+'@'+name+' '+ta.value.slice(ta.selectionStart);
+        Mention.boxes[taId].emails[email.toLowerCase()]=name; hide(); ta.focus();
+      });
+    },
+    emails:function(taId){ var b=Mention.boxes[taId]; return b?Object.keys(b.emails):[]; }
+  };
 
   // ---------- modal ----------
   function openModal(title, sub, cta, cls, requireNote, onConfirm){
@@ -973,6 +1025,7 @@
     ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
     document.getElementById('modal-cancel').addEventListener('click',close);
     var noteEl=document.getElementById('modal-note'); noteEl.focus();
+    Mention.attach('modal-note'); // permite @mencionar dentro de la nota
     document.getElementById('modal-ok').addEventListener('click',function(){
       var note=noteEl.value.trim(); if(requireNote&&!note){ noteEl.focus(); return; }
       var ok=document.getElementById('modal-ok'); ok.disabled=true; ok.textContent='Guardando…';
