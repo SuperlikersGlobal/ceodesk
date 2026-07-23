@@ -96,6 +96,7 @@
   .rowlbl{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;margin:2px 0 10px}
   .row{display:flex;align-items:center;gap:13px;padding:13px 15px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;text-align:left;transition:border-color .12s,box-shadow .12s}
   .row:hover{border-color:var(--brand);box-shadow:var(--shadow)}
+  .row--assist{border-left:3px solid var(--brand)}
   .row .prio{width:4px;align-self:stretch;border-radius:4px;flex-shrink:0}
   .row .rmain{min-width:0;flex:1}
   .row .rtitle{font-weight:650;font-size:14.5px;display:flex;gap:8px;align-items:center}
@@ -224,7 +225,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'' };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -270,7 +271,9 @@
   function loadAndStart(){
     // deriva el usuario desde el token (payload firmado) antes de cargar
     state.user = decodeUser(state.token);
-    Promise.all([loadRequests(), loadRoster(), loadGtasks(), loadJira(), loadFiscal()]).then(function(){
+    var loaders = [loadRequests(), loadRoster(), loadGtasks(), loadJira()];
+    if(state.user.fin || state.user.role==='ceo') loaders.push(loadFiscal()); // fiscal solo para quien tiene acceso
+    Promise.all(loaders).then(function(){
       state.loaded = true;
       if(!location.hash) location.hash = '#/bandeja';
       render();
@@ -359,6 +362,10 @@
     var nav = '';
     nav += navItem('#/bandeja','📥','Mi trabajo', inboxOpen, route);
     nav += navItem('#/tablero','📊','Tablero', 0, route);
+    if(state.gtasksEnabled && (state.user.role==='ceo' || state.user.sup)){
+      var gtOpen = (state.gtasks||[]).filter(function(t){return t.status!=='done';}).length;
+      nav += navItem('#/google-tasks','✅','Google Tasks', gtOpen, route);
+    }
     if(state.user.sup){
       var supOpen = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me && isOpen(r.status);}).length;
       nav += navItem('#/supervision','👁','Supervisión', supOpen, route);
@@ -402,20 +409,25 @@
     if(route==='#/tablero') return viewBoard();
     if(route==='#/metricas') return viewMetrics();
     if(route==='#/historial') return viewHistory();
+    if(route==='#/google-tasks') return viewGoogleTasks();
     if(route==='#/fiscal') return (state.user.fin || state.user.role==='ceo') ? viewFiscal() : { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">🔒</div><p>No tienes acceso a esta sección. Contacta al CEO si crees que deberías verla.</p></div>' };
     return viewInbox(); // #/bandeja para todos
   }
 
   // ---------- views ----------
   function requestRow(r){
-    return '<a class="row" href="#/solicitud/'+encodeURIComponent(r.id)+'">'+
+    var me = state.user && state.user.email;
+    // Marca los ítems que son de mi principal (los que atiendo en su nombre).
+    var forPrincipal = me && r.assigneeId!==me && iAssist(r.assigneeId);
+    var assistTag = forPrincipal ? '<span class="badge b-brand bdot">En nombre de '+esc((r.assigneeName||'').split(' ')[0])+'</span>' : '';
+    return '<a class="row'+(forPrincipal?' row--assist':'')+'" href="#/solicitud/'+encodeURIComponent(r.id)+'">'+
       '<span class="prio" style="background:'+PRIO_COLOR[r.priority]+'"></span>'+
       avatar(r.requesterName)+
       '<span class="rmain"><span class="rtitle"><span class="rcode">'+esc(r.code)+'</span> '+esc(r.title)+'</span>'+
         '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
         (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+
         (r.labels&&r.labels.length?'<span>·</span>'+labelChips(r):'')+'</span></span>'+
-      '<span class="rside">'+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
+      '<span class="rside">'+assistTag+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
   }
   function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
 
@@ -531,7 +543,14 @@
     return { title:'Mi trabajo', html:
       '<div class="phead"><h1>Mi trabajo</h1><p>'+lead+'</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
-      '<div class="toolbar">'+chips+'</div>'+list+gtSection()+jiraSection() };
+      '<div class="toolbar">'+chips+'</div>'+list+jiraSection() };
+  }
+  // Google Tasks en su propia pestaña (separado de las solicitudes de CeoDesk).
+  function viewGoogleTasks(){
+    var body = gtSection();
+    if(!body) body = '<div class="empty"><div class="ic">✅</div><p>Google Tasks no está disponible para tu cuenta.</p></div>';
+    return { title:'Google Tasks', html:
+      '<div class="phead"><h1>Google Tasks</h1><p>Tus tareas de Google Tasks, separadas de las solicitudes que te asigna el equipo en CeoDesk.</p></div>'+body };
   }
   function stat(label,val,cls){ return '<div class="stat"><div class="stat__label">'+label+'</div><div class="stat__value '+(cls||'')+'">'+val+'</div></div>'; }
 
@@ -1150,6 +1169,11 @@
     html += '<button class="chip'+(country==='MX'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'MX\')">🇲🇽 México</button>';
     html += '<button class="chip'+(country==='US'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'US\')">🇺🇸 USA</button>';
     html += '</div>';
+    // Compañía (entidad) — filtra por empresa del grupo
+    var entity = state.fiscalEntity||'';
+    var entOpts = '<option value="">🏢 Todas las compañías</option>';
+    Object.keys(ENTITY_LABEL).forEach(function(e){ entOpts += '<option value="'+e+'"'+(entity===e?' selected':'')+'>'+esc(ENTITY_LABEL[e])+'</option>'; });
+    html += '<select onchange="CeoDesk.fiscalSetEntity(this.value)" style="width:auto;padding:7px 10px;border:1px solid var(--border-strong);border-radius:9px;font-size:12.5px;font-weight:600;background:var(--surface);color:var(--ink)">'+entOpts+'</select>';
     // Vista toggle
     html += '<div style="margin-left:auto;display:flex;border:1px solid var(--border-strong);border-radius:9px;overflow:hidden">';
     html += '<button onclick="CeoDesk.fiscalSetView(\'calendar\')" style="padding:7px 14px;font-size:12.5px;font-weight:700;border:none;cursor:pointer;background:'+(view==='calendar'?'var(--ink)':'var(--surface)')+';color:'+(view==='calendar'?'var(--surface)':'var(--muted)')+'">📅 Calendario</button>';
@@ -1168,6 +1192,7 @@
     // ── Filtrar items ─────────────────────────────────────────────────────
     var items = state.fiscal.slice();
     if(country) items = items.filter(function(o){ return o.country===country; });
+    if(entity) items = items.filter(function(o){ return (o.entity_ids||[]).indexOf(entity)>=0; });
     if(status==='overdue') items = items.filter(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today; });
     else if(status==='pending') items = items.filter(function(o){ return o.status!=='complied'; });
     else if(status==='complied') items = items.filter(function(o){ return o.status==='complied'; });
@@ -1300,6 +1325,7 @@
   }
 
   function fiscalSetCountry(c){ state.fiscalCountry=c; render(); }
+  function fiscalSetEntity(e){ state.fiscalEntity=e; render(); }
   function fiscalSetStatus(s){ state.fiscalStatus=s; render(); }
   function fiscalSetView(v){ state.fiscalView=v; render(); }
   function fiscalSetCalMonth(m){ state.fiscalCalMonth=m; render(); }
@@ -1350,7 +1376,7 @@
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
     gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect,
     jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect,
-    fiscalSetCountry:fiscalSetCountry, fiscalSetStatus:fiscalSetStatus, fiscalSetView:fiscalSetView, fiscalSetCalMonth:fiscalSetCalMonth, fiscalEdit:fiscalEdit, fiscalCancelEdit:fiscalCancelEdit, fiscalComply:fiscalComply, fiscalUndo:fiscalUndo, fiscalSaveBudget:fiscalSaveBudget, fiscalSeed:fiscalSeed };
+    fiscalSetCountry:fiscalSetCountry, fiscalSetEntity:fiscalSetEntity, fiscalSetStatus:fiscalSetStatus, fiscalSetView:fiscalSetView, fiscalSetCalMonth:fiscalSetCalMonth, fiscalEdit:fiscalEdit, fiscalCancelEdit:fiscalCancelEdit, fiscalComply:fiscalComply, fiscalUndo:fiscalUndo, fiscalSaveBudget:fiscalSaveBudget, fiscalSeed:fiscalSeed };
 
   window.addEventListener('hashchange', function(){ if(state.user) render(); });
   boot();
