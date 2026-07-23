@@ -385,6 +385,7 @@
     var me = state.user.email;
     var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && !r.snoozedAt;}).length;
     var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
+    var snoozedCount = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && r.snoozedAt;}).length;
     var inboxNews = state.requests.some(function(r){return (isInboxItem(r,me) || (r.watchers&&r.watchers.indexOf(me)>=0)) && hasNews(r);});
     var mineNews = state.requests.some(function(r){return r.requesterId===me && hasNews(r);});
     var route = location.hash || '#/bandeja';
@@ -401,6 +402,7 @@
       var supNews = state.requests.some(function(r){return r.requesterId!==me && r.assigneeId!==me && hasNews(r);});
       nav += navItem('#/supervision','👁','Supervisión', supOpen, route, supNews);
     }
+    if(snoozedCount>0) nav += navItem('#/pospuestas','⏸','Pospuestas', snoozedCount, route);
     nav += navItem('#/nueva','➕','Nueva solicitud', 0, route);
     nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route, mineNews);
     if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
@@ -441,6 +443,7 @@
     if(route==='#/metricas') return viewMetrics();
     if(route==='#/historial') return viewHistory();
     if(route==='#/google-tasks') return viewGoogleTasks();
+    if(route==='#/pospuestas') return viewPospuestas();
     if(route==='#/fiscal') return (state.user.fin || state.user.role==='ceo') ? viewFiscal() : { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">🔒</div><p>No tienes acceso a esta sección. Contacta al CEO si crees que deberías verla.</p></div>' };
     return viewInbox(); // #/bandeja para todos
   }
@@ -575,14 +578,6 @@
     var lead = assisting
       ? 'Lo que te asignaron y lo asignado a quien asistes: puedes actuar en su nombre para evacuarlo.'
       : 'Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.';
-    // Pospuestas: ítems de mi bandeja en espera (no cuentan como pendientes).
-    var snoozed = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && r.snoozedAt;})
-      .sort(function(a,b){return a.snoozedAt<b.snoozedAt?1:-1;});
-    var snoozedSec = snoozed.length
-      ? '<div class="rowlbl" style="margin-top:26px">Pospuestas · '+snoozed.length+
-        ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— en espera de una respuesta o de que se cumplan condiciones</span></div>'+
-        '<div class="rows">'+snoozed.map(requestRow).join('')+'</div>'
-      : '';
     // Ítems que sigo como informador (solo lectura, no cuentan como pendientes).
     var watched = state.requests.filter(function(r){return r.assigneeId!==me && r.requesterId!==me && r.watchers && r.watchers.indexOf(me)>=0;})
       .sort(function(a,b){return a.updatedAt<b.updatedAt?1:-1;});
@@ -594,7 +589,18 @@
     return { title:'Mi trabajo', html:
       '<div class="phead"><h1>Mi trabajo</h1><p>'+lead+'</p></div>'+
       '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
-      '<div class="toolbar">'+chips+'</div>'+list+snoozedSec+watchedSec+jiraSection() };
+      '<div class="toolbar">'+chips+'</div>'+list+watchedSec+jiraSection() };
+  }
+  // Pospuestas en su propia pestaña del menú lateral (ítems de mi bandeja en espera).
+  function viewPospuestas(){
+    var me = state.user.email;
+    var snoozed = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status) && r.snoozedAt;})
+      .sort(function(a,b){return a.snoozedAt<b.snoozedAt?1:-1;});
+    var body = snoozed.length
+      ? '<div class="rows">'+snoozed.map(requestRow).join('')+'</div>'
+      : '<div class="empty"><div class="ic">⏸</div><p>No tienes tareas pospuestas. Cuando pospongas una, aparecerá aquí hasta que la reactives o llegue una respuesta.</p></div>';
+    return { title:'Pospuestas', html:
+      '<div class="phead"><h1>Pospuestas</h1><p>Tareas que pusiste en espera mientras se aclara algo o se cumplen las condiciones. No cuentan como pendientes; al recibir una respuesta se reactivan solas.</p></div>'+body };
   }
   // Google Tasks en su propia pestaña (separado de las solicitudes de CeoDesk).
   function viewGoogleTasks(){
