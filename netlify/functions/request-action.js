@@ -7,7 +7,7 @@ import { authUser, json } from './_lib/auth.js'
 import { getRequest, saveRequest } from './_lib/store.js'
 import { applyAction, isOpen, isValidAction, isActionAllowedForType, ASSIGNEE_ACTIONS, REQUESTER_ACTIONS } from './_lib/lifecycle.js'
 import { canViewRequest, assigneeOf, emailOf, principalsFor } from './_lib/users.js'
-import { notifyRequesterAttended } from './_lib/notify.js'
+import { notifyActivity } from './_lib/notify.js'
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405)
@@ -52,11 +52,19 @@ export default async (req) => {
   const updated = applyAction(request, action, actor, (note || '').trim() || null)
   await saveRequest(updated)
 
-  // Avisar por correo al solicitante cuando OTRA persona atiende su solicitud.
-  // (Si el solicitante actúa sobre lo suyo, no se auto-notifica.)
-  if (String(updated.requesterId || '').toLowerCase() !== me) {
-    const evt = updated.events[updated.events.length - 1]
-    await notifyRequesterAttended(updated, evt && evt.type, actor.name, (note || '').trim() || null)
+  // Avisar por correo a la OTRA parte del ítem (bidireccional): si el destinatario
+  // actúa, se avisa al solicitante; si el solicitante responde/comenta, se avisa al
+  // destinatario. No se auto-notifica (ni al actor ni a quien actúa en su nombre).
+  const evt = updated.events[updated.events.length - 1]
+  const requesterId = String(updated.requesterId || '').toLowerCase()
+  const assigneeId = assigneeOf(updated)
+  const exclude = new Set([me, ...principalsFor(me)])
+  const recipients = [
+    { to: requesterId, role: 'requester' },
+    { to: assigneeId, role: 'assignee' },
+  ].filter((r) => r.to && !exclude.has(r.to))
+  for (const r of recipients) {
+    await notifyActivity(r.to, updated, evt && evt.type, actor.name, (note || '').trim() || null, r.role)
   }
 
   return json({ request: updated })

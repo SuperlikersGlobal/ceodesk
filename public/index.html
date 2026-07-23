@@ -97,6 +97,8 @@
   .row{display:flex;align-items:center;gap:13px;padding:13px 15px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;text-align:left;transition:border-color .12s,box-shadow .12s}
   .row:hover{border-color:var(--brand);box-shadow:var(--shadow)}
   .row--assist{border-left:3px solid var(--brand)}
+  .newsdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:6px;vertical-align:middle;flex:0 0 auto}
+  .nav .newsdot{margin-left:6px;margin-right:0}
   .row .prio{width:4px;align-self:stretch;border-radius:4px;flex-shrink:0}
   .row .rmain{min-width:0;flex:1}
   .row .rtitle{font-weight:650;font-size:14.5px;display:flex;gap:8px;align-items:center}
@@ -225,7 +227,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'' };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'', seen:{} };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -271,7 +273,7 @@
   function loadAndStart(){
     // deriva el usuario desde el token (payload firmado) antes de cargar
     state.user = decodeUser(state.token);
-    var loaders = [loadRequests(), loadRoster(), loadGtasks(), loadJira()];
+    var loaders = [loadRequests(), loadRoster(), loadGtasks(), loadJira(), loadSeen()];
     if(state.user.fin || state.user.role==='ceo') loaders.push(loadFiscal()); // fiscal solo para quien tiene acceso
     Promise.all(loaders).then(function(){
       state.loaded = true;
@@ -295,6 +297,24 @@
   function iAssist(assigneeId){ var a=state.user&&state.user.asst; return !!a && a.indexOf(String(assigneeId||'').toLowerCase())>=0; }
   // ¿Este ítem va a mi bandeja? (asignado a mí, o a alguien a quien asisto)
   function isInboxItem(r,me){ return r.assigneeId===me || iAssist(r.assigneeId); }
+  // ---- Novedades (loguito rojo): actividad nueva desde mi última visita ----
+  function loadSeen(){ return api('/seen').then(function(d){ state.seen=d.seen||{}; }).catch(function(){ state.seen={}; }); }
+  function lastEvent(r){ var e=r&&r.events; return (e&&e.length)?e[e.length-1]:null; }
+  // ¿Tiene novedad? Último evento posterior a mi última visita y no lo hice yo.
+  function hasNews(r){
+    if(!r) return false;
+    var me=state.user&&state.user.email; var le=lastEvent(r);
+    if(!le) return false;
+    var ts=le.createdAt||r.updatedAt||''; var seen=state.seen[r.id]||'';
+    return ts>seen && String(le.actorId||'').toLowerCase()!==me;
+  }
+  // Marca un ítem como visto (limpia su novedad). Idempotente; evita bucles de render.
+  function markSeen(r){
+    if(!r) return; var le=lastEvent(r); var ts=(le&&le.createdAt)||r.updatedAt||'';
+    if((state.seen[r.id]||'')>=ts) return; // ya al día
+    state.seen[r.id]=new Date().toISOString();
+    api('/seen',{method:'POST',body:{id:r.id}}).then(function(){ render(); }).catch(function(){});
+  }
   function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
   function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
   function loadFiscal(){ return api('/fiscal').then(function(d){ state.fiscal = d.obligations||[]; state.fiscalLoaded=true; }).catch(function(){ state.fiscal=[]; state.fiscalLoaded=true; }); }
@@ -357,10 +377,12 @@
     var me = state.user.email;
     var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).length;
     var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
+    var inboxNews = state.requests.some(function(r){return isInboxItem(r,me) && hasNews(r);});
+    var mineNews = state.requests.some(function(r){return r.requesterId===me && hasNews(r);});
     var route = location.hash || '#/bandeja';
 
     var nav = '';
-    nav += navItem('#/bandeja','📥','Mi trabajo', inboxOpen, route);
+    nav += navItem('#/bandeja','📥','Mi trabajo', inboxOpen, route, inboxNews);
     nav += navItem('#/tablero','📊','Tablero', 0, route);
     if(state.gtasksEnabled && (state.user.role==='ceo' || state.user.sup)){
       var gtOpen = (state.gtasks||[]).filter(function(t){return t.status!=='done';}).length;
@@ -368,10 +390,11 @@
     }
     if(state.user.sup){
       var supOpen = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me && isOpen(r.status);}).length;
-      nav += navItem('#/supervision','👁','Supervisión', supOpen, route);
+      var supNews = state.requests.some(function(r){return r.requesterId!==me && r.assigneeId!==me && hasNews(r);});
+      nav += navItem('#/supervision','👁','Supervisión', supOpen, route, supNews);
     }
     nav += navItem('#/nueva','➕','Nueva solicitud', 0, route);
-    nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route);
+    nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route, mineNews);
     if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
     nav += navItem('#/historial','🗂️','Historial', 0, route);
     if(state.user.fin || state.user.role==='ceo') nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
@@ -397,9 +420,9 @@
       '</div>';
     if(view.after) view.after();
   }
-  function navItem(href,ic,label,count,route){
+  function navItem(href,ic,label,count,route,news){
     var on = route===href || (href==='#/bandeja'&&route==='#/') ? ' on':'';
-    return '<a class="nav'+on+'" href="'+href+'"><span class="ic">'+ic+'</span> '+label+(count>0?'<span class="count">'+count+'</span>':'')+'</a>';
+    return '<a class="nav'+on+'" href="'+href+'"><span class="ic">'+ic+'</span> '+label+(count>0?'<span class="count">'+count+'</span>':'')+(news?'<span class="newsdot" title="Novedades sin ver"></span>':'')+'</a>';
   }
   function renderRoute(route){
     if(route.indexOf('#/solicitud/')===0) return viewDetail(route.slice('#/solicitud/'.length));
@@ -420,10 +443,11 @@
     // Marca los ítems que son de mi principal (los que atiendo en su nombre).
     var forPrincipal = me && r.assigneeId!==me && iAssist(r.assigneeId);
     var assistTag = forPrincipal ? '<span class="badge b-brand bdot">En nombre de '+esc((r.assigneeName||'').split(' ')[0])+'</span>' : '';
+    var news = hasNews(r) ? '<span class="newsdot" title="Novedad sin ver"></span>' : '';
     return '<a class="row'+(forPrincipal?' row--assist':'')+'" href="#/solicitud/'+encodeURIComponent(r.id)+'">'+
       '<span class="prio" style="background:'+PRIO_COLOR[r.priority]+'"></span>'+
       avatar(r.requesterName)+
-      '<span class="rmain"><span class="rtitle"><span class="rcode">'+esc(r.code)+'</span> '+esc(r.title)+'</span>'+
+      '<span class="rmain"><span class="rtitle">'+news+'<span class="rcode">'+esc(r.code)+'</span> '+esc(r.title)+'</span>'+
         '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
         (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+
         (r.labels&&r.labels.length?'<span>·</span>'+labelChips(r):'')+'</span></span>'+
@@ -743,6 +767,8 @@
   function viewDetail(id){
     var r = findReq(id);
     if(!r){ return { title:'Solicitud', html:'<div class="empty"><div class="ic">🔍</div><p>No encontramos esa solicitud.</p><a class="link" href="#/">Volver</a></div>' }; }
+    markSeen(r); // al abrir el detalle, limpia su novedad
+
     var isAssignee = r.assigneeId===state.user.email || iAssist(r.assigneeId);
     var isRequester = r.requesterId===state.user.email;
     var open=isOpen(r.status);

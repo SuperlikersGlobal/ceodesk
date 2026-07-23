@@ -24,18 +24,27 @@ export function appBaseUrl() {
 }
 export function verbFor(eventType) { return VERB[eventType] || 'actualizó' }
 
-// Devuelve { subject, text, html } para el aviso de "solicitud atendida".
-export function buildAttendedEmail(request, eventType, actorName, note) {
+// Lead según el rol del destinatario del aviso.
+function activityLead(forRole) {
+  if (forRole === 'requester') return 'Tu solicitud tuvo actividad.'
+  if (forRole === 'assignee') return 'Novedad en una solicitud que te asignaron.'
+  return 'Novedad en una solicitud.'
+}
+
+// Devuelve { subject, text, html } para un aviso de ACTIVIDAD (comentario,
+// respuesta, decisión…) dirigido a la otra parte del ítem. `forRole` adapta el
+// encabezado ('requester' | 'assignee' | null).
+export function buildActivityEmail(request, eventType, actorName, note, forRole) {
   const verb = verbFor(eventType)
   const code = request.code || ''
-  const title = request.title || 'tu solicitud'
+  const title = request.title || 'la solicitud'
   const who = actorName || 'Alguien'
   const link = `${appBaseUrl()}/#/solicitud/${encodeURIComponent(request.id)}`
 
   const subject = `CeoDesk · ${who} ${verb} ${code}`.replace(/\s+/g, ' ').trim()
   const noteLine = note ? `\nNota: "${note}"` : ''
   const text =
-    `Hola,\n\n${who} ${verb} tu solicitud ${code}: "${title}".${noteLine}\n\n` +
+    `Hola,\n\n${who} ${verb} la solicitud ${code}: "${title}".${noteLine}\n\n` +
     `Ver el detalle:\n${link}\n\n— CeoDesk`
 
   const noteHtml = note
@@ -44,8 +53,8 @@ export function buildAttendedEmail(request, eventType, actorName, note) {
   const html =
     `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a1d2b">
       <h2 style="margin:0 0 4px;font-size:18px">CeoDesk</h2>
-      <p style="margin:0 0 16px;color:#626a80">Tu solicitud fue atendida.</p>
-      <p style="margin:0 0 6px"><b>${esc(who)}</b> ${esc(verb)} tu solicitud
+      <p style="margin:0 0 16px;color:#626a80">${esc(activityLead(forRole))}</p>
+      <p style="margin:0 0 6px"><b>${esc(who)}</b> ${esc(verb)} la solicitud
         <b>${esc(code)}</b>.</p>
       <p style="margin:0 0 14px;font-size:15px">"${esc(title)}"</p>
       ${noteHtml}
