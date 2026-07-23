@@ -118,6 +118,18 @@
   .gt-card .gt-meta{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .gt-card .gt-act{display:flex;gap:7px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
   .gt-card .gt-act .btn{padding:7px 12px;font-size:12.5px}
+  /* Chips de filtro por unidad económica (un color por unidad). */
+  .gt-units{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+  .gt-unit{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;border:2px solid transparent;background:var(--surface-2);color:var(--muted);transition:box-shadow .15s,border-color .15s}
+  .gt-unit .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:0 0 auto}
+  .gt-unit.on{box-shadow:var(--shadow)}
+  .gt-unit.u-brand{background:var(--brand-soft);color:var(--brand-ink)} .gt-unit.on.u-brand{border-color:var(--brand)}
+  .gt-unit.u-blue{background:var(--blue-soft);color:var(--blue)} .gt-unit.on.u-blue{border-color:var(--blue)}
+  .gt-unit.u-green{background:var(--green-soft);color:var(--green)} .gt-unit.on.u-green{border-color:var(--green)}
+  .gt-unit.u-amber{background:var(--amber-soft);color:var(--amber)} .gt-unit.on.u-amber{border-color:var(--amber)}
+  .gt-unit.u-red{background:var(--red-soft);color:var(--red)} .gt-unit.on.u-red{border-color:var(--red)}
+  .gt-unit.u-slate{background:var(--slate-soft);color:var(--slate)} .gt-unit.on.u-slate{border-color:var(--slate)}
+  .gt-unit.u-all{background:var(--surface-2);color:var(--muted)} .gt-unit.on.u-all{border-color:var(--ink);color:var(--ink)}
   #toasts{position:fixed;right:18px;bottom:18px;z-index:1000;display:flex;flex-direction:column;gap:10px}
   .toast{background:var(--ink);color:var(--surface);padding:12px 16px;border-radius:10px;font-size:13.5px;font-weight:650;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:340px}
   .toast--in{opacity:1;transform:none} .toast--out{opacity:0;transform:translateY(8px)}
@@ -235,7 +247,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], gtSort:'recent', jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'', seen:{} };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], gtSort:'recent', gtUnit:'', jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'', seen:{} };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -472,10 +484,16 @@
   // ---- Google Tasks (hub compartido con LADCC) ----
   var GT_STATUS = { todo:['Por hacer','b-slate'], doing:['En curso','b-blue'], blocked:['Bloqueada','b-amber'], done:['Hecha','b-green'] };
   var GT_META_LBL = { cat:'Categoría', imp:'Importancia', urg:'Urgencia' };
+  // Un color por unidad económica (lista). Las 6 del hub tienen color fijo; el
+  // resto se asigna cíclicamente por posición. gtColorOf se rellena al render.
+  var GT_UNIT_KEYS = ['brand','blue','green','amber','red','slate'];
+  var GT_UNIT_MAP = { 'superlikers':'brand', 'ladcc':'blue', 'dcdg':'green', 'lih':'amber', 'la isabella':'red', 'dcc':'slate' };
+  var gtColorOf = {};
+  function gtUnitKey(name, idx){ var k=(name||'').toLowerCase().trim(); if(GT_UNIT_MAP[k]) return GT_UNIT_MAP[k]; var i=((idx||0)%GT_UNIT_KEYS.length+GT_UNIT_KEYS.length)%GT_UNIT_KEYS.length; return GT_UNIT_KEYS[i]; }
   function gtCard(t){
     var st = GT_STATUS[t.status] || GT_STATUS.todo;
     var meta='';
-    meta += '<span class="badge b-brand">'+esc(t.listName)+'</span>';
+    meta += '<span class="badge b-'+(gtColorOf[t.listName]||gtUnitKey(t.listName,0))+'">'+esc(t.listName)+'</span>';
     if(t.meta){ ['cat','imp','urg'].forEach(function(k){ if(t.meta[k]) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(GT_META_LBL[k])+': '+esc(t.meta[k])+'</span>'; }); }
     if(t.fingerprint) meta += '<span class="chip" style="padding:3px 10px;font-size:11.5px" title="Sincronizada con LADCC">🔗 '+esc(t.fingerprint)+'</span>';
     var due = t.due?'<span class="due '+dueInfo(t.due).tone+'">'+esc(dueInfo(t.due).label)+'</span>':'';
@@ -499,21 +517,13 @@
   var GT_URG_RANK = { 'Hoy':0, 'Pronto':1, 'Esta semana':2, 'Sin prisa':3 };
   function gtRecentCmp(x,y){ var xu=x.updated||'', yu=y.updated||''; return xu<yu?1:(xu>yu?-1:0); }
   function gtMetaRank(t,k,map){ var v=t.meta&&t.meta[k]; return (v&&map[v]!==undefined)?map[v]:99; }
-  function gtSortTasks(arr, mode, unitOrder){
+  function gtSortTasks(arr, mode){
     var a = arr.slice();
     if(mode==='due'){
       a.sort(function(x,y){
         if(!x.due&&!y.due) return gtRecentCmp(x,y);
         if(!x.due) return 1; if(!y.due) return -1;      // sin fecha, al final
         if(x.due!==y.due) return x.due<y.due?-1:1;       // vencimiento más próximo primero
-        return gtRecentCmp(x,y);
-      });
-    } else if(mode==='unit'){
-      a.sort(function(x,y){
-        var xi=unitOrder.indexOf(x.listName), yi=unitOrder.indexOf(y.listName);
-        if(xi<0) xi=99; if(yi<0) yi=99;
-        if(xi!==yi) return xi-yi;
-        var c=(x.listName||'').localeCompare(y.listName||'','es'); if(c) return c;
         return gtRecentCmp(x,y);
       });
     } else if(mode==='imp'||mode==='urg'){
@@ -550,24 +560,45 @@
       var urgOpts = '<option value="">Urgencia…</option>'+['Hoy','Pronto','Esta semana','Sin prisa'].map(function(v){return '<option>'+v+'</option>';}).join('');
       metaSel = '<select id="gt-imp">'+impOpts+'</select><select id="gt-urg">'+urgOpts+'</select>';
     }
-    var open = state.gtasks.filter(function(t){return t.status!=='done';});
-    open = gtSortTasks(open, state.gtSort, lists);
+    // Color por unidad (orden estable de las listas) para chips y badges.
+    gtColorOf = {};
+    lists.forEach(function(nm,i){ gtColorOf[nm]=gtUnitKey(nm,i); });
+    var allOpen = state.gtasks.filter(function(t){return t.status!=='done';});
+    // Conteo por unidad (sobre todo lo abierto, no sobre lo filtrado).
+    var unitCounts = {};
+    allOpen.forEach(function(t){ unitCounts[t.listName]=(unitCounts[t.listName]||0)+1; });
+    // Filtro por la unidad seleccionada y luego ordenamiento.
+    var shown = state.gtUnit ? allOpen.filter(function(t){return t.listName===state.gtUnit;}) : allOpen;
+    shown = gtSortTasks(shown, state.gtSort);
     var add = '<div class="gt-add">'+
       '<input id="gt-title" placeholder="Captura rápida: nueva tarea…" onkeydown="if(event.key===\'Enter\')CeoDesk.gtCreate()">'+
       listSel+metaSel+
       '<button class="btn btn--primary" onclick="CeoDesk.gtCreate()"'+(state.gtBusy?' disabled':'')+'>＋ Añadir</button></div>';
+    // Chips de filtro por unidad económica (un color por unidad), arriba del listado.
+    var unitsRow = '';
+    if(lists.length && allOpen.length){
+      unitsRow = '<div class="gt-units">'+
+        '<span class="gt-unit u-all'+(state.gtUnit===''?' on':'')+'" onclick="CeoDesk.gtSetUnit(\'\')">Todas · '+allOpen.length+'</span>'+
+        lists.map(function(nm){
+          return '<span class="gt-unit u-'+gtColorOf[nm]+(state.gtUnit===nm?' on':'')+'" data-u="'+esc(nm)+'" onclick="CeoDesk.gtSetUnit(this.dataset.u)">'+
+            '<span class="dot"></span>'+esc(nm)+' · '+(unitCounts[nm]||0)+'</span>';
+        }).join('')+
+      '</div>';
+    }
     // Control de ordenamiento (importancia/urgencia solo para el CEO, que las etiqueta).
-    var sortOpts = [['recent','Últimas creadas'],['due','Fecha de vencimiento'],['unit', isCeoUser?'Unidad económica':'Lista']];
+    var sortOpts = [['recent','Últimas creadas'],['due','Fecha de vencimiento']];
     if(isCeoUser){ sortOpts.push(['imp','Importancia']); sortOpts.push(['urg','Urgencia']); }
-    var sortSel = open.length>1 ? '<div class="gt-add" style="justify-content:flex-end;gap:8px;align-items:center;margin-bottom:8px">'+
+    var sortSel = shown.length>1 ? '<div class="gt-add" style="justify-content:flex-end;gap:8px;align-items:center;margin-bottom:8px">'+
       '<span style="color:var(--muted);font-size:12.5px;font-weight:600">Ordenar por</span>'+
       '<select id="gt-sort" onchange="CeoDesk.gtSetSort(this.value)">'+
         sortOpts.map(function(o){return '<option value="'+o[0]+'"'+(state.gtSort===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+
       '</select></div>' : '';
-    var list = open.length ? sortSel+'<div class="rows">'+open.map(gtCard).join('')+'</div>'
+    var rows = shown.length ? '<div class="rows">'+shown.map(gtCard).join('')+'</div>'
+      : '<p style="color:var(--muted);font-size:13px">No hay tareas pendientes en esta unidad.</p>';
+    var list = allOpen.length ? unitsRow+sortSel+rows
       : '<p style="color:var(--muted);font-size:13px">Sin tareas de Google pendientes.</p>';
     var disconnect = isCeoUser ? '' : ' <a class="link" style="font-size:12px;font-weight:600;cursor:pointer" onclick="CeoDesk.gtDisconnect()">Desconectar</a>';
-    return '<div class="rowlbl" style="margin-top:26px">Google Tasks · '+open.length+
+    return '<div class="rowlbl" style="margin-top:26px">Google Tasks · '+allOpen.length+
       ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">'+sub+'</span>'+disconnect+'</div>'+add+list;
   }
 
@@ -1544,7 +1575,7 @@
     delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
-    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect, gtSetSort:function(v){state.gtSort=v;render();},
+    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect, gtSetSort:function(v){state.gtSort=v;render();}, gtSetUnit:function(v){state.gtUnit=v||'';render();},
     jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect,
     fiscalSetCountry:fiscalSetCountry, fiscalSetEntity:fiscalSetEntity, fiscalSetStatus:fiscalSetStatus, fiscalSetView:fiscalSetView, fiscalSetCalMonth:fiscalSetCalMonth, fiscalEdit:fiscalEdit, fiscalCancelEdit:fiscalCancelEdit, fiscalComply:fiscalComply, fiscalUndo:fiscalUndo, fiscalSaveBudget:fiscalSaveBudget, fiscalSeed:fiscalSeed };
 
