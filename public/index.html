@@ -235,7 +235,7 @@
   var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
   var DAY = 86400000;
 
-  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'', seen:{} };
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], gtSort:'recent', jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'', seen:{} };
   var root = document.getElementById('root');
 
   // ---------- utils ----------
@@ -492,6 +492,42 @@
         '<div class="gt-meta"><span class="badge '+st[1]+' bdot">'+st[0]+'</span>'+meta+(due?due:'')+'</div></div>'+
       '<div class="gt-act">'+acts+'</div></div>';
   }
+  // Ordenamiento de las tarjetas de Google Tasks. Por defecto: últimas creadas
+  // primero (Google Tasks no expone fecha de creación, usamos 'updated' como
+  // referencia: para una tarea recién creada equivale a su creación).
+  var GT_IMP_RANK = { 'Alta':0, 'Media':1, 'Baja':2 };
+  var GT_URG_RANK = { 'Hoy':0, 'Pronto':1, 'Esta semana':2, 'Sin prisa':3 };
+  function gtRecentCmp(x,y){ var xu=x.updated||'', yu=y.updated||''; return xu<yu?1:(xu>yu?-1:0); }
+  function gtMetaRank(t,k,map){ var v=t.meta&&t.meta[k]; return (v&&map[v]!==undefined)?map[v]:99; }
+  function gtSortTasks(arr, mode, unitOrder){
+    var a = arr.slice();
+    if(mode==='due'){
+      a.sort(function(x,y){
+        if(!x.due&&!y.due) return gtRecentCmp(x,y);
+        if(!x.due) return 1; if(!y.due) return -1;      // sin fecha, al final
+        if(x.due!==y.due) return x.due<y.due?-1:1;       // vencimiento más próximo primero
+        return gtRecentCmp(x,y);
+      });
+    } else if(mode==='unit'){
+      a.sort(function(x,y){
+        var xi=unitOrder.indexOf(x.listName), yi=unitOrder.indexOf(y.listName);
+        if(xi<0) xi=99; if(yi<0) yi=99;
+        if(xi!==yi) return xi-yi;
+        var c=(x.listName||'').localeCompare(y.listName||'','es'); if(c) return c;
+        return gtRecentCmp(x,y);
+      });
+    } else if(mode==='imp'||mode==='urg'){
+      var map = mode==='imp'?GT_IMP_RANK:GT_URG_RANK;
+      a.sort(function(x,y){
+        var xr=gtMetaRank(x,mode,map), yr=gtMetaRank(y,mode,map);
+        if(xr!==yr) return xr-yr;                          // Alta/Hoy primero; sin etiqueta al final
+        return gtRecentCmp(x,y);
+      });
+    } else {
+      a.sort(gtRecentCmp);                                 // 'recent' (por defecto)
+    }
+    return a;
+  }
   function gtSection(){
     var isCeoUser = state.user.role==='ceo';
     if(!(isCeoUser || state.user.sup) || !state.gtasksEnabled) return '';
@@ -515,11 +551,20 @@
       metaSel = '<select id="gt-imp">'+impOpts+'</select><select id="gt-urg">'+urgOpts+'</select>';
     }
     var open = state.gtasks.filter(function(t){return t.status!=='done';});
+    open = gtSortTasks(open, state.gtSort, lists);
     var add = '<div class="gt-add">'+
       '<input id="gt-title" placeholder="Captura rápida: nueva tarea…" onkeydown="if(event.key===\'Enter\')CeoDesk.gtCreate()">'+
       listSel+metaSel+
       '<button class="btn btn--primary" onclick="CeoDesk.gtCreate()"'+(state.gtBusy?' disabled':'')+'>＋ Añadir</button></div>';
-    var list = open.length ? '<div class="rows">'+open.map(gtCard).join('')+'</div>'
+    // Control de ordenamiento (importancia/urgencia solo para el CEO, que las etiqueta).
+    var sortOpts = [['recent','Últimas creadas'],['due','Fecha de vencimiento'],['unit', isCeoUser?'Unidad económica':'Lista']];
+    if(isCeoUser){ sortOpts.push(['imp','Importancia']); sortOpts.push(['urg','Urgencia']); }
+    var sortSel = open.length>1 ? '<div class="gt-add" style="justify-content:flex-end;gap:8px;align-items:center;margin-bottom:8px">'+
+      '<span style="color:var(--muted);font-size:12.5px;font-weight:600">Ordenar por</span>'+
+      '<select id="gt-sort" onchange="CeoDesk.gtSetSort(this.value)">'+
+        sortOpts.map(function(o){return '<option value="'+o[0]+'"'+(state.gtSort===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+
+      '</select></div>' : '';
+    var list = open.length ? sortSel+'<div class="rows">'+open.map(gtCard).join('')+'</div>'
       : '<p style="color:var(--muted);font-size:13px">Sin tareas de Google pendientes.</p>';
     var disconnect = isCeoUser ? '' : ' <a class="link" style="font-size:12px;font-weight:600;cursor:pointer" onclick="CeoDesk.gtDisconnect()">Desconectar</a>';
     return '<div class="rowlbl" style="margin-top:26px">Google Tasks · '+open.length+
@@ -1499,7 +1544,7 @@
     delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
     dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
     act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
-    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect,
+    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect, gtSetSort:function(v){state.gtSort=v;render();},
     jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect,
     fiscalSetCountry:fiscalSetCountry, fiscalSetEntity:fiscalSetEntity, fiscalSetStatus:fiscalSetStatus, fiscalSetView:fiscalSetView, fiscalSetCalMonth:fiscalSetCalMonth, fiscalEdit:fiscalEdit, fiscalCancelEdit:fiscalCancelEdit, fiscalComply:fiscalComply, fiscalUndo:fiscalUndo, fiscalSaveBudget:fiscalSaveBudget, fiscalSeed:fiscalSeed };
 
