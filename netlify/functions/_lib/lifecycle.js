@@ -34,6 +34,8 @@ const ACTION_STATUS = {
   reopen: 'open',
   cancel: 'cancelled',
   comment: null, // no cambia el estado
+  snooze: null,  // posponer: no cambia el estado, marca snoozedAt
+  unsnooze: null, // reactivar: limpia snoozedAt
 }
 
 // action -> tipo de evento en el historial
@@ -53,6 +55,8 @@ const ACTION_EVENT = {
   reopen: 'reopened',
   cancel: 'cancelled',
   comment: 'commented',
+  snooze: 'snoozed',
+  unsnooze: 'reactivated',
 }
 
 // Acciones por tipo de ítem, separadas por quién puede tomarlas.
@@ -66,9 +70,11 @@ const BY_TYPE = {
   bug: { assignee: ['start', 'resolve', 'block', 'resume'], requester: ['close', 'reopen'] },
 }
 const UNIVERSAL_ACTIONS = ['provide_info', 'cancel', 'comment']
+// Gestión de bandeja del destinatario: aplica a cualquier tipo (posponer / reactivar).
+const ASSIGNEE_MANAGE = ['snooze', 'unsnooze']
 
 // Todas las acciones del destinatario / del solicitante (para el control de acceso).
-export const ASSIGNEE_ACTIONS = Array.from(new Set(Object.values(BY_TYPE).flatMap((t) => t.assignee)))
+export const ASSIGNEE_ACTIONS = Array.from(new Set([...Object.values(BY_TYPE).flatMap((t) => t.assignee), ...ASSIGNEE_MANAGE]))
 export const REQUESTER_ACTIONS = Array.from(new Set(['provide_info', 'cancel', ...Object.values(BY_TYPE).flatMap((t) => t.requester)]))
 // Acciones que registran un desenlace (auditoría: quién y cuándo).
 const RESOLUTION_ACTIONS = ['approve', 'reject', 'sign', 'complete', 'mark_read', 'resolve', 'close']
@@ -83,7 +89,7 @@ export function isValidAction(action) {
 
 // ¿La acción aplica a un ítem de este tipo?
 export function isActionAllowedForType(action, type) {
-  if (UNIVERSAL_ACTIONS.includes(action)) return true
+  if (UNIVERSAL_ACTIONS.includes(action) || ASSIGNEE_MANAGE.includes(action)) return true
   const t = BY_TYPE[type]
   if (!t) return false
   return t.assignee.includes(action) || t.requester.includes(action)
@@ -114,6 +120,7 @@ export function buildRequest(input, code, requester, assignee, now = new Date().
     assigneeName: assignee.name,
     area: input.area || null,
     labels: Array.isArray(input.labels) ? input.labels : [],
+    watchers: Array.isArray(input.watchers) ? input.watchers : [], // informadores adicionales
     context: input.context,
     recommendation: input.recommendation || null,
     impact: input.impact || null,
@@ -121,6 +128,7 @@ export function buildRequest(input, code, requester, assignee, now = new Date().
     documentUrl: input.documentUrl || null,
     documentVersion: input.documentVersion || null,
     dueDate: input.dueDate || null,
+    snoozedAt: null, // pospuesta: marca de tiempo si está en espera
     createdAt: now,
     updatedAt: now,
     decidedAt: null,
@@ -139,6 +147,9 @@ export function applyAction(req, action, actor, note, now = new Date().toISOStri
   const newStatus = ACTION_STATUS[action]
   if (newStatus) next.status = newStatus
   next.updatedAt = now
+  // Posponer / reactivar. Al recibir respuesta (provide_info) se reactiva sola.
+  if (action === 'snooze') next.snoozedAt = now
+  else if (action === 'unsnooze' || action === 'provide_info') next.snoozedAt = null
   if (RESOLUTION_ACTIONS.includes(action)) {
     next.decidedAt = now
     next.decidedByName = actor.name

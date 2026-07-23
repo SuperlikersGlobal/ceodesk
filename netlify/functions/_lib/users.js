@@ -48,6 +48,12 @@ export function emailOf(user) {
   return String((user && (user.u || user.email)) || '').toLowerCase()
 }
 
+// Informadores adicionales de una solicitud (se enteran de la actividad, solo lectura).
+export function watchersOf(request) {
+  const w = request && request.watchers
+  return (Array.isArray(w) ? w : []).map((e) => String(e || '').toLowerCase()).filter(Boolean)
+}
+
 // Delegaciones de visibilidad: qué solicitudes de OTROS puede ver un usuario.
 // VIEWER_DELEGATIONS = JSON { "correo_del_delegado": ["correo1","correo2", ...] }
 // Ej: {"angela@iwin.im":["magali@iwin.im","santiago@iwin.im"]}
@@ -102,6 +108,7 @@ export function canViewRequest(user, request) {
   const requester = String((request && request.requesterId) || '').toLowerCase()
   const assignee = assigneeOf(request)
   if (me === requester || me === assignee) return true
+  if (watchersOf(request).includes(me)) return true // informador adicional
   if (isCeo(user)) return true
   if (isChiefOfStaff(me) && ceoEmails().includes(assignee)) return true
   if (principalsFor(me).includes(assignee)) return true // asistente del destinatario

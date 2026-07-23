@@ -25,6 +25,10 @@ Producción: **https://ceodesk.superlikers.com**
   | **Decisión** | Pendiente → Resuelta |
   | **Lectura** | Pendiente → Leída |
   El detalle muestra las acciones correctas por tipo (una tarea se *empieza/marca hecha*, no se *aprueba*).
+- **Posponer.** El destinatario puede **posponer** un ítem mientras espera una
+  respuesta o que se cumplan condiciones; pasa a una sección **"Pospuestas"** (no
+  cuenta como pendiente) y se **reactiva** manualmente o solo cuando llega la
+  respuesta. Al resolver/posponer, se confirma con un aviso y se vuelve al listado.
 - **Debido proceso** sólo donde toca: las decisiones exigen contexto +
   recomendación + impacto; las tareas/incidencias solo título + descripción.
 - **Visibilidad por organigrama.** El solicitante y el destinatario siempre ven
@@ -43,11 +47,13 @@ Producción: **https://ceodesk.superlikers.com**
 - **Auditoría** completa por ítem (quién hizo qué y cuándo) y **registro interno
   de firma** (quién firmó, cuándo, sobre qué versión).
 - **Avisos por correo** (SMTP de Google Workspace, reutilizable la cuenta del CRM):
-  - Cuando **te asignan una solicitud nueva**, el **destinatario** recibe un email
-    con el tipo, el título, la fecha límite y un enlace al ítem.
-  - Cuando **otra persona atiende una solicitud tuya** (la aprueba, firma, resuelve,
-    comenta, pide info, etc.), el **solicitante** recibe el aviso.
-  - No hay auto-notificación (si actúas sobre lo tuyo, no te llega correo).
+  - Cuando **te asignan una solicitud nueva**, el **destinatario** recibe un email.
+  - **Cualquier actividad** (comentario, respuesta, aprobación, decisión…) avisa a
+    **la otra parte** del ítem: si el destinatario actúa, se avisa al solicitante;
+    si el solicitante responde, se avisa al destinatario. Sin auto-notificación.
+- **Novedades en la app (loguito rojo).** Los ítems con **actividad nueva desde tu
+  última visita** muestran un punto rojo en la fila y en el menú lateral; se limpia
+  al abrir el detalle. (Se guarda por usuario "cuándo viste cada ítem".)
 - **Aviso por WhatsApp (SilvIA).** Cuando te asignan algo marcado **Urgente**, se
   te avisa por WhatsApp (usando la plantilla aprobada de SilvIA del CRM). Solo a
   quienes tengan teléfono configurado.
@@ -92,7 +98,8 @@ netlify/functions/
   google-login.js                 POST /api/google-login     (credential -> token de sesión)
   roster.js                       GET  /api/roster           (personas para elegir destinatario)
   requests.js                     GET/POST /api/requests      (listar / crear + aviso al destinatario)
-  request-action.js               POST /api/request-action    (acciones + aviso al solicitante)
+  request-action.js               POST /api/request-action    (acciones + aviso a la otra parte)
+  seen.js                         GET/POST /api/seen          (novedades: última visita por ítem)
   google-tasks.js                 GET/POST /api/google-tasks  (Google Tasks: hub CEO / propio líder)
   jira-connect.js                 GET  /api/jira-connect      (URL de autorización OAuth de Jira)
   jira-callback.js                GET  /api/jira-callback     (fin del OAuth: guarda tokens del usuario)

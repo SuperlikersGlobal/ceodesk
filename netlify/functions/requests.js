@@ -6,7 +6,7 @@ import { listRequests, getRequest, saveRequest, nextCode } from './_lib/store.js
 import { buildRequest, REQUEST_TYPES, PRIORITIES, isDecisionType } from './_lib/lifecycle.js'
 import { canViewRequest, defaultAssignee } from './_lib/users.js'
 import { nameFor } from './_lib/org.js'
-import { notifyAssigneeNew, alertAssigneeUrgentWa } from './_lib/notify.js'
+import { notifyAssigneeNew, alertAssigneeUrgentWa, notifyWatcherAdded } from './_lib/notify.js'
 
 // Rellena campos nuevos en ítems antiguos (destinatario, etiquetas).
 function normalize(r) {
@@ -19,6 +19,23 @@ function normalize(r) {
     out = { ...out, assigneeName: nameFor(out.assigneeId) || out.assigneeId }
   }
   if (!Array.isArray(out.labels)) out = { ...out, labels: [] }
+  if (!Array.isArray(out.watchers)) out = { ...out, watchers: [] }
+  return out
+}
+
+// Informadores: correos válidos (conocidos), sin duplicados, sin el solicitante
+// ni el destinatario (ellos ya se enteran), acotado.
+function cleanWatchers(v, exclude) {
+  if (!Array.isArray(v)) return []
+  const ex = new Set((exclude || []).map((e) => String(e || '').toLowerCase()))
+  const seen = new Set(); const out = []
+  for (const x of v) {
+    const e = String(x || '').trim().toLowerCase()
+    if (!e || ex.has(e) || seen.has(e)) continue
+    if (!nameFor(e)) continue // debe ser alguien conocido del roster
+    seen.add(e); out.push(e)
+    if (out.length >= 10) break
+  }
   return out
 }
 
@@ -81,6 +98,7 @@ export default async (req) => {
       priority: PRIORITIES.includes(body.priority) ? body.priority : 'medium',
       area: (body.area || '').trim() || null,
       labels: cleanLabels(body.labels),
+      watchers: cleanWatchers(body.watchers, [u.u, assigneeEmail]),
       context: body.context.trim(),
       recommendation: (body.recommendation || '').trim() || null,
       impact: (body.impact || '').trim() || null,
@@ -99,6 +117,8 @@ export default async (req) => {
       await notifyAssigneeNew(request)                 // correo
       if (request.priority === 'urgent') await alertAssigneeUrgentWa(request) // WhatsApp (SilvIA)
     }
+    // Avisar a los informadores adicionales que los sumaron.
+    for (const w of request.watchers) await notifyWatcherAdded(w, request)
 
     return json({ request }, 201)
   }

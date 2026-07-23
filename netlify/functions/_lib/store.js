@@ -72,6 +72,20 @@ export async function deleteJira(email) {
   await jiraStore().delete(String(email || '').toLowerCase())
 }
 
+// "Visto por" usuario: última vez que abrió cada ítem. key = email -> { requestId: ISO }.
+// Sirve para marcar novedades (actividad nueva desde la última visita).
+export const seenStore = () => store('ceodesk-seen')
+export async function getSeen(email) {
+  return (await seenStore().get(String(email || '').toLowerCase(), { type: 'json' })) || {}
+}
+export async function markSeen(email, requestId, ts) {
+  const s = seenStore(); const key = String(email || '').toLowerCase()
+  const map = (await s.get(key, { type: 'json' })) || {}
+  map[requestId] = ts || new Date().toISOString()
+  await s.setJSON(key, map)
+  return map
+}
+
 // Preferencias por usuario (p. ej. si un líder conectó Google Tasks). key = email.
 export const prefsStore = () => store('ceodesk-prefs')
 
