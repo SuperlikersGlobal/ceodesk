@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f1120" />
+<title>CeoDesk</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<style>
+  :root {
+    --ground:#f4f5fb; --surface:#fff; --surface-2:#f7f8fc; --ink:#1a1d2b; --muted:#626a80; --faint:#9298ad;
+    --border:#e6e8f2; --border-strong:#d4d8e6; --brand:#4f46e5; --brand-ink:#4338ca; --brand-soft:#eceafe;
+    --green:#15803d; --green-soft:#e6f5ec; --amber:#b45309; --amber-soft:#fbf0dd; --red:#b91c1c; --red-soft:#fbe9e9;
+    --blue:#1d4ed8; --blue-soft:#e7eefd; --slate:#475569; --slate-soft:#eef0f5;
+    --radius:13px; --radius-sm:9px;
+    --shadow:0 1px 2px rgba(20,24,50,.04),0 6px 22px rgba(20,24,50,.07);
+    --shadow-lg:0 18px 60px rgba(20,24,50,.18);
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --sidebar-w:224px;
+  }
+  @media (prefers-color-scheme: dark){:root{
+    --ground:#0e1020; --surface:#181b2c; --surface-2:#1f2236; --ink:#e8eaf5; --muted:#a2a8c0; --faint:#767d98;
+    --border:#2a2e46; --border-strong:#3a3f5c; --brand:#8983f6; --brand-ink:#a9a4fb; --brand-soft:#26264a;
+    --green:#4ade80; --green-soft:#173026; --amber:#fbbf24; --amber-soft:#33280f; --red:#f87171; --red-soft:#331a1c;
+    --blue:#7ea6ff; --blue-soft:#182541; --slate:#94a3b8; --slate-soft:#232838;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 22px rgba(0,0,0,.35); --shadow-lg:0 18px 60px rgba(0,0,0,.55);
+  }}
+  :root[data-theme="light"]{
+    --ground:#f4f5fb; --surface:#fff; --surface-2:#f7f8fc; --ink:#1a1d2b; --muted:#626a80; --faint:#9298ad;
+    --border:#e6e8f2; --border-strong:#d4d8e6; --brand:#4f46e5; --brand-ink:#4338ca; --brand-soft:#eceafe;
+    --green:#15803d; --green-soft:#e6f5ec; --amber:#b45309; --amber-soft:#fbf0dd; --red:#b91c1c; --red-soft:#fbe9e9;
+    --blue:#1d4ed8; --blue-soft:#e7eefd; --slate:#475569; --slate-soft:#eef0f5;
+    --shadow:0 1px 2px rgba(20,24,50,.04),0 6px 22px rgba(20,24,50,.07);
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e1020; --surface:#181b2c; --surface-2:#1f2236; --ink:#e8eaf5; --muted:#a2a8c0; --faint:#767d98;
+    --border:#2a2e46; --border-strong:#3a3f5c; --brand:#8983f6; --brand-ink:#a9a4fb; --brand-soft:#26264a;
+    --green:#4ade80; --green-soft:#173026; --amber:#fbbf24; --amber-soft:#33280f; --red:#f87171; --red-soft:#331a1c;
+    --blue:#7ea6ff; --blue-soft:#182541; --slate:#94a3b8; --slate-soft:#232838;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 22px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body,#root{height:100%;margin:0}
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
+  .tnum{font-variant-numeric:tabular-nums}
+  :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  /* Login */
+  .login{min-height:100%;display:grid;place-items:center;background:radial-gradient(120% 90% at 50% -10%,var(--brand-soft),transparent 60%),var(--ground)}
+  .loginbox{width:360px;max-width:88vw;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);padding:34px 28px}
+  .loginbox .lg{width:54px;height:54px;border-radius:15px;background:var(--brand);display:grid;place-items:center;color:#fff;font-weight:800;font-size:25px;margin:0 auto 16px}
+  .loginbox h1{font-size:21px;margin:0} .loginbox .sub{color:var(--muted);font-size:13.5px;margin:7px 0 22px}
+  #gbtn{display:flex;justify-content:center;min-height:44px}
+  .login-msg{color:var(--red);font-size:13px;margin-top:14px;min-height:18px}
+  .login-foot{margin-top:16px;font-size:12px;color:var(--faint)}
+
+  /* Shell */
+  .app{display:flex;min-height:100%}
+  .side{width:var(--sidebar-w);flex-shrink:0;background:#0f1120;color:#c7cbe0;display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:20;padding:14px 10px}
+  .side__brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:750;padding:6px 8px 14px;font-size:16px}
+  .side__logo{width:29px;height:29px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff;font-weight:800}
+  .nav{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:9px;color:#b7bcd4;font-weight:600;font-size:13.5px;transition:background .12s,color .12s}
+  .nav:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav.on{background:var(--brand);color:#fff}
+  .nav .ic{width:17px;text-align:center}
+  .nav .count{margin-left:auto;background:rgba(255,255,255,.16);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:800}
+  .side__foot{margin-top:auto;font-size:11.5px;color:#8b90ab;padding:10px 8px 2px;border-top:1px solid rgba(255,255,255,.08)}
+  .side__foot b{color:#c7cbe0;font-weight:650}
+
+  .main{flex:1;margin-left:var(--sidebar-w);min-width:0;display:flex;flex-direction:column}
+  .top{height:58px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 22px;position:sticky;top:0;z-index:10}
+  .top__title{font-weight:700;font-size:15px} .top__spacer{flex:1}
+  .content{padding:24px;max-width:1120px;width:100%;margin:0 auto}
+
+  .avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0}
+  .who{display:flex;align-items:center;gap:9px}
+  .who__meta{line-height:1.15} .who__name{font-size:13px;font-weight:700} .who__role{font-size:11.5px;color:var(--muted)}
+  .iconbtn{border:1px solid var(--border-strong);background:var(--surface);color:var(--muted);border-radius:8px;padding:7px 11px;font-weight:650;font-size:12.5px}
+  .iconbtn:hover{background:var(--surface-2)}
+
+  .phead{margin-bottom:20px} .phead h1{font-size:22px;margin:0} .phead p{margin:4px 0 0;color:var(--muted);max-width:62ch}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+  .stat__label{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+  .stat__value{font-size:28px;font-weight:800;margin-top:6px}
+  .stat__value.danger{color:var(--red)} .stat__value.warn{color:var(--amber)}
+
+  .toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .chip{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600;color:var(--muted)}
+  .chip.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+  .rows{display:flex;flex-direction:column;gap:10px}
+  .rowlbl{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;margin:2px 0 10px}
+  .row{display:flex;align-items:center;gap:13px;padding:13px 15px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;text-align:left;transition:border-color .12s,box-shadow .12s}
+  .row:hover{border-color:var(--brand);box-shadow:var(--shadow)}
+  .row--assist{border-left:3px solid var(--brand)}
+  .row .prio{width:4px;align-self:stretch;border-radius:4px;flex-shrink:0}
+  .row .rmain{min-width:0;flex:1}
+  .row .rtitle{font-weight:650;font-size:14.5px;display:flex;gap:8px;align-items:center}
+  .rcode{color:var(--faint);font-weight:700;font-size:12.5px}
+  .row .rmeta{color:var(--muted);font-size:12.5px;margin-top:3px;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .row .rside{display:flex;align-items:center;gap:9px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+
+  .gt-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px}
+  .gt-add input{flex:1;min-width:180px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 12px;font-size:13.5px}
+  .gt-add select{border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 10px;font-size:12.5px;font-weight:600}
+  .gt-card{display:flex;align-items:flex-start;gap:13px;padding:13px 15px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+  .gt-card.done{opacity:.62}
+  .gt-card .gt-main{min-width:0;flex:1}
+  .gt-card .gt-title{font-weight:650;font-size:14.5px}
+  .gt-card.done .gt-title{text-decoration:line-through}
+  .gt-card .gt-desc{color:var(--muted);font-size:13px;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .gt-card .gt-meta{margin-top:7px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .gt-card .gt-act{display:flex;gap:7px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+  .gt-card .gt-act .btn{padding:7px 12px;font-size:12.5px}
+  .badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+  .badge.bdot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}
+  .b-green{background:var(--green-soft);color:var(--green)} .b-red{background:var(--red-soft);color:var(--red)}
+  .b-amber{background:var(--amber-soft);color:var(--amber)} .b-blue{background:var(--blue-soft);color:var(--blue)}
+  .b-slate{background:var(--slate-soft);color:var(--slate)} .b-brand{background:var(--brand-soft);color:var(--brand-ink)}
+  .due{font-size:12.5px;font-weight:650} .due.overdue{color:var(--red)} .due.soon{color:var(--amber)} .due.ok{color:var(--muted)} .due.none{color:var(--faint)}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .split{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+  .field{margin-bottom:15px} .field label{display:block;font-weight:650;font-size:13.5px;margin-bottom:5px}
+  .field .hint{font-weight:400;color:var(--muted);font-size:12.5px;margin:-1px 0 6px}
+  .inp,.ta,.sel{width:100%;border:1px solid var(--border-strong);border-radius:9px;padding:10px 12px;font-size:13.5px;font-family:inherit;background:var(--surface);color:var(--ink)}
+  .ta{min-height:78px;resize:vertical} .inp:focus,.ta:focus,.sel:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .typegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+  .topt{border:1.5px solid var(--border-strong);border-radius:10px;padding:12px 6px;text-align:center;font-weight:650;font-size:12.5px;color:var(--muted);background:var(--surface)}
+  .topt.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-ink)}
+  .topt .ti{display:block;font-size:20px;margin-bottom:3px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);border-radius:9px;padding:10px 16px;font-size:13.5px;font-weight:650;transition:background .12s,opacity .12s}
+  .btn:hover{background:var(--surface-2)} .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn--primary{background:var(--brand);border-color:var(--brand);color:#fff} .btn--primary:hover{filter:brightness(1.05);background:var(--brand)}
+  .btn--green{background:var(--green);border-color:var(--green);color:#fff} .btn--red{background:var(--surface);border-color:var(--border-strong);color:var(--red)} .btn--red:hover{background:var(--red-soft)}
+
+  .dblock{margin-bottom:16px} .dblock h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin:0 0 5px} .dblock p{margin:0;white-space:pre-wrap}
+  .docpill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface-2);border-radius:9px;padding:9px 12px;font-weight:600;font-size:13px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+  .kv:last-child{border-bottom:0} .kv .k{color:var(--muted)} .kv .v{font-weight:650;text-align:right}
+  .callout{background:var(--amber-soft);border:1px solid color-mix(in srgb,var(--amber) 32%,transparent);border-radius:12px;padding:14px}
+  .callout h4{font-size:13px;color:var(--amber);margin:0 0 8px}
+  .decision{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:18px}
+
+  .tl{position:relative;padding-left:20px} .tl::before{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:var(--border)}
+  .tli{position:relative;padding-bottom:14px} .tli::before{content:"";position:absolute;left:-20px;top:3px;width:11px;height:11px;border-radius:50%;background:var(--surface);border:2px solid var(--border-strong)}
+  .tli.g::before{border-color:var(--green)} .tli.r::before{border-color:var(--red)} .tli.a::before{border-color:var(--amber)} .tli.br::before{border-color:var(--brand)}
+  .tli .th{font-size:13.5px} .tli .tt{font-size:11.5px;color:var(--faint);margin-top:1px} .tli .tn{margin-top:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12.8px;white-space:pre-wrap}
+
+  .back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:650;font-size:13.5px;margin-bottom:14px;background:none;border:0}
+  .actionbar{display:flex;flex-wrap:wrap;gap:8px}
+  .empty{text-align:center;padding:52px 20px;color:var(--muted)} .empty .ic{font-size:34px;margin-bottom:8px}
+  .link{color:var(--brand);font-weight:650}
+  .banner{display:flex;gap:9px;background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 22%,transparent);color:var(--brand-ink);border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:18px}
+
+  .overlay{position:fixed;inset:0;background:rgba(15,17,32,.5);display:grid;place-items:center;z-index:50;padding:20px}
+  .modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-lg);width:440px;max-width:92vw;padding:22px}
+  .modal h2{margin:0 0 6px;font-size:17px} .modal .msub{color:var(--muted);margin:0 0 16px;font-size:13.5px}
+  .modal__actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+
+  /* Kanban */
+  .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}
+  .kcol{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:10px;transition:background .12s,border-color .12s}
+  .kcol.over{background:var(--brand-soft);border-color:var(--brand)}
+  .kcol__head{font-weight:700;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:2px 4px 10px;display:flex;align-items:center;gap:8px}
+  .kcount{background:var(--slate-soft);color:var(--slate);border-radius:999px;padding:0 8px;font-size:12px;font-weight:800}
+  .kcol__body{display:flex;flex-direction:column;gap:9px;min-height:44px}
+  .kcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px;cursor:pointer;box-shadow:var(--shadow)}
+  .kcard[draggable="true"]{cursor:grab}
+  .kcard[draggable="true"]:active{cursor:grabbing}
+  .kcard__title{font-weight:600;font-size:13.5px;line-height:1.35}
+  .kcard__meta{color:var(--faint);font-size:12px;margin-top:4px}
+  .kcard__foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:8px}
+  .kempty{color:var(--faint);font-size:12.5px;text-align:center;padding:12px 0}
+  @media (max-width:900px){.kanban{grid-template-columns:1fr 1fr}}
+  @media (max-width:600px){.kanban{grid-template-columns:1fr}}
+  /* Métricas */
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .mcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+  .mcard h3{font-size:13px;margin:0 0 14px;font-weight:700}
+  .mrow{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px}
+  .mrow__label{width:160px;flex-shrink:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mrow__bar{flex:1;background:var(--surface-2);border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border)}
+  .mrow__fill{height:100%;background:var(--brand);border-radius:6px;min-width:2px}
+  .mrow__val{width:32px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  @media (max-width:820px){.mgrid{grid-template-columns:1fr}.mrow__label{width:120px}}
+  /* Etiquetas */
+  .lbls{display:inline-flex;gap:5px;flex-wrap:wrap;vertical-align:middle}
+  .lbl{display:inline-flex;align-items:center;gap:4px;background:var(--slate-soft);color:var(--slate);border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:650;white-space:nowrap}
+  .taginput{display:flex;flex-wrap:wrap;gap:6px;border:1px solid var(--border-strong);border-radius:9px;padding:7px 8px;background:var(--surface)}
+  .taginput:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .taginput .lbl{background:var(--brand-soft);color:var(--brand-ink);font-size:12.5px;padding:3px 8px}
+  .taginput .lbl b{cursor:pointer;font-weight:800;opacity:.6;margin-left:1px}
+  .taginput input{border:0;outline:0;flex:1;min-width:120px;font-size:13.5px;background:transparent;color:var(--ink)}
+  .menu-btn{display:none}
+  @media (max-width:900px){.split{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.typegrid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+  @media (max-width:720px){
+    .side{transform:translateX(-100%);transition:transform .2s;width:230px} .side.open{transform:translateX(0)}
+    .main{margin-left:0} .content{padding:16px} .menu-btn{display:inline-flex} .row .rside{flex-direction:column;align-items:flex-end;gap:5px}
+  }
+</style>
+</head>
+<body>
+<div id="root"><div class="login"><div class="loginbox"><div class="lg">C</div><h1>CeoDesk</h1><p class="sub">Cargando…</p></div></div></div>
+
+<script>
+(function(){
+  "use strict";
+  var API = '/api';
+  var TOKEN_KEY = 'ceodesk_token';
+  var TYPE = { task:'Tarea', bug:'Incidencia', approve:'Aprobación', sign:'Firma', decide:'Decisión', read:'Lectura' };
+  var TYPE_ICON = { task:'📋', bug:'🐞', approve:'✅', sign:'✍️', decide:'⚖️', read:'👁' };
+  var DECISION_TYPES = ['approve','sign','decide'];
+  var STATUS = { pending:'Pendiente', in_review:'En revisión', info_requested:'Info solicitada', approved:'Aprobada', rejected:'Rechazada', signed:'Firmada', read:'Leída', todo:'Por hacer', doing:'En curso', done:'Hecha', blocked:'Bloqueada', open:'Abierta', resolved:'Resuelta', closed:'Cerrada', cancelled:'Cancelada' };
+  var STATUS_TONE = { pending:'amber', in_review:'blue', info_requested:'amber', approved:'green', rejected:'red', signed:'green', read:'green', todo:'slate', doing:'blue', done:'green', blocked:'red', open:'amber', resolved:'blue', closed:'green', cancelled:'slate' };
+  var PRIO = { low:'Baja', medium:'Media', high:'Alta', urgent:'Urgente' };
+  var PRIO_COLOR = { low:'var(--slate)', medium:'var(--blue)', high:'var(--amber)', urgent:'var(--red)' };
+  var OPEN = ['pending','in_review','info_requested','todo','doing','blocked','open','resolved'];
+  var EVENT = { created:'creó el ítem', commented:'comentó', info_requested:'pidió más información', info_provided:'respondió con más información', approved:'aprobó', rejected:'rechazó', signed:'firmó', read:'marcó como leída', started:'empezó', completed:'completó', blocked:'bloqueó', resumed:'reanudó', resolved:'resolvió', closed:'cerró', reopened:'reabrió', cancelled:'canceló' };
+  var EVENT_ACCENT = { approved:'g', signed:'g', completed:'g', read:'g', closed:'g', resolved:'br', reopened:'a', rejected:'r', blocked:'r', info_requested:'a', created:'br' };
+  var DAY = 86400000;
+
+  var state = { config:null, token:null, user:null, requests:[], roster:[], loaded:false, listFilter:'all', histFilter:'all', boardScope:'', boardArea:'', boardKind:'task', boardLabel:'', gtasks:[], gtasksEnabled:false, gtBusy:false, gtasksMode:'', gtasksConnected:false, gtasksLists:[], jira:[], jiraEnabled:false, jiraConnected:false, jiraSite:'', jiraBusy:false, jiraFlash:null, fiscal:[], fiscalLoaded:false, fiscalBusy:false, fiscalCountry:'', fiscalStatus:'', fiscalEntity:'', fiscalEditId:null, fiscalView:'calendar', fiscalCalMonth:'' };
+  var root = document.getElementById('root');
+
+  // ---------- utils ----------
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function isOpen(s){ return OPEN.indexOf(s)>=0; }
+  function initials(n){ return String(n||'').split(' ').filter(Boolean).slice(0,2).map(function(x){return x[0].toUpperCase();}).join(''); }
+  function avatarColor(n){ var c=['#4f46e5','#0891b2','#db2777','#ea580c','#16a34a','#7c3aed']; var h=0; n=String(n||''); for(var i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h); return c[Math.abs(h)%c.length]; }
+  function avatar(name,size){ size=size||30; return '<span class="avatar" style="background:'+avatarColor(name)+';width:'+size+'px;height:'+size+'px;font-size:'+(size*0.4)+'px" title="'+esc(name)+'">'+esc(initials(name))+'</span>'; }
+  function fmtDate(iso){ if(!iso) return '—'; return new Date(iso).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); }
+  function fmtDateTime(iso){ if(!iso) return '—'; return new Date(iso).toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+  function rel(iso){ if(!iso) return ''; var d=new Date(iso).getTime()-Date.now(); var a=Math.abs(d),f=d>0,v,u; if(a<3600000){v=Math.max(1,Math.round(a/60000));u='min';} else if(a<DAY){v=Math.round(a/3600000);u='h';} else {v=Math.round(a/DAY);u='d';} return f?('en '+v+' '+u):('hace '+v+' '+u); }
+  function dueInfo(iso){ if(!iso) return {label:'Sin fecha límite',tone:'none'}; var d=new Date(iso).getTime()-Date.now(); if(d<0) return {label:'Vencida '+rel(iso),tone:'overdue'}; if(d<2*DAY) return {label:'Vence '+rel(iso),tone:'soon'}; return {label:'Vence '+rel(iso),tone:'ok'}; }
+  function typeBadge(t){ return '<span class="badge b-brand">'+TYPE_ICON[t]+' '+TYPE[t]+'</span>'; }
+  function statusBadge(s){ return '<span class="badge bdot b-'+STATUS_TONE[s]+'">'+STATUS[s]+'</span>'; }
+  function prioBadge(p){ var tone=p==='urgent'?'red':p==='high'?'amber':p==='medium'?'blue':'slate'; return '<span class="badge b-'+tone+'">'+PRIO[p]+'</span>'; }
+  function dueBadge(iso){ var d=dueInfo(iso); return '<span class="due '+d.tone+'">'+esc(d.label)+'</span>'; }
+  function labelChips(r){ return (r.labels&&r.labels.length)?'<span class="lbls">'+r.labels.map(function(l){return '<span class="lbl">'+esc(l)+'</span>';}).join('')+'</span>':''; }
+  function allLabels(){ var s={}; state.requests.forEach(function(r){ (r.labels||[]).forEach(function(l){ s[l]=1; }); }); return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'es');}); }
+
+  // ---------- api ----------
+  function api(path, opts){
+    opts = opts || {};
+    var headers = { 'Content-Type':'application/json' };
+    if(state.token) headers['Authorization'] = 'Bearer '+state.token;
+    return fetch(API+path, { method:opts.method||'GET', headers:headers, body:opts.body?JSON.stringify(opts.body):undefined })
+      .then(function(r){
+        if(r.status===401){ logout(); throw new Error('Tu sesión expiró. Vuelve a entrar.'); }
+        return r.json().catch(function(){return {};}).then(function(data){ if(!r.ok) throw new Error(data.error||('Error '+r.status)); return data; });
+      });
+  }
+
+  // ---------- auth ----------
+  function boot(){
+    state.token = sessionStorage.getItem(TOKEN_KEY);
+    // Vuelta del OAuth de Jira: ?jira=connected|error|nosite. Limpia la URL.
+    try{ var qp=new URLSearchParams(location.search); state.jiraFlash=qp.get('jira');
+      if(state.jiraFlash) history.replaceState(null,'',location.pathname+location.hash); }catch(e){}
+    api('/config').then(function(cfg){
+      state.config = cfg;
+      if(state.token){ loadAndStart(); } else { showLogin(); }
+    }).catch(function(){ showLogin('No se pudo cargar la configuración.'); });
+  }
+  function loadAndStart(){
+    // deriva el usuario desde el token (payload firmado) antes de cargar
+    state.user = decodeUser(state.token);
+    var loaders = [loadRequests(), loadRoster(), loadGtasks(), loadJira()];
+    if(state.user.fin || state.user.role==='ceo') loaders.push(loadFiscal()); // fiscal solo para quien tiene acceso
+    Promise.all(loaders).then(function(){
+      state.loaded = true;
+      if(!location.hash) location.hash = '#/bandeja';
+      render();
+      if(state.jiraFlash==='error'){ alert('No se pudo conectar Jira. Intenta de nuevo.'); }
+      else if(state.jiraFlash==='nosite'){ alert('No encontramos un sitio de Jira para tu cuenta.'); }
+      state.jiraFlash=null;
+    }).catch(function(e){ showLogin(e.message); });
+  }
+  function decodeUser(token){
+    try{
+      var seg=token.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      var bin=atob(seg), bytes=new Uint8Array(bin.length);
+      for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      var p=JSON.parse(new TextDecoder('utf-8').decode(bytes)); // UTF-8 para nombres con tildes
+      return {email:p.u,name:p.name,role:p.role,title:p.title,sup:!!p.sup,fin:!!p.fin,asst:Array.isArray(p.asst)?p.asst:[]};
+    } catch(e){ return {email:'',name:'Usuario',role:'leader',title:'',sup:false,fin:false,asst:[]}; }
+  }
+  // ¿Soy asistente del destinatario de este ítem? (actúo en su nombre)
+  function iAssist(assigneeId){ var a=state.user&&state.user.asst; return !!a && a.indexOf(String(assigneeId||'').toLowerCase())>=0; }
+  // ¿Este ítem va a mi bandeja? (asignado a mí, o a alguien a quien asisto)
+  function isInboxItem(r,me){ return r.assigneeId===me || iAssist(r.assigneeId); }
+  function loadRequests(){ return api('/requests').then(function(d){ state.requests = d.requests||[]; }); }
+  function loadRoster(){ return api('/roster').then(function(d){ state.roster = d.people||[]; }).catch(function(){ state.roster=[]; }); }
+  function loadFiscal(){ return api('/fiscal').then(function(d){ state.fiscal = d.obligations||[]; state.fiscalLoaded=true; }).catch(function(){ state.fiscal=[]; state.fiscalLoaded=true; }); }
+  // Google Tasks: el CEO ve el hub (6 listas); los líderes, sus propias listas (opt-in).
+  function loadGtasks(){
+    if(!state.user || !(state.user.role==='ceo' || state.user.sup)){ state.gtasks=[]; state.gtasksEnabled=false; state.gtasksConnected=false; return Promise.resolve(); }
+    return api('/google-tasks').then(function(d){
+      state.gtasksEnabled=!!d.enabled; state.gtasksConnected=!!d.connected;
+      state.gtasksMode=d.mode||''; state.gtasksLists=d.lists||[]; state.gtasks=d.tasks||[];
+    }).catch(function(){ state.gtasks=[]; state.gtasksEnabled=false; state.gtasksConnected=false; });
+  }
+  // Jira (espejo vivo): cada usuario ve sus issues asignados (opt-in por persona).
+  function loadJira(){
+    if(!state.user){ state.jiraEnabled=false; state.jiraConnected=false; state.jira=[]; return Promise.resolve(); }
+    return api('/jira').then(function(d){
+      state.jiraEnabled=!!d.enabled; state.jiraConnected=!!d.connected; state.jira=d.issues||[]; state.jiraSite=d.site||'';
+    }).catch(function(){ state.jiraEnabled=false; state.jiraConnected=false; state.jira=[]; });
+  }
+
+  function showLogin(msg){
+    root.innerHTML =
+      '<div class="login"><div class="loginbox">'+
+        '<div class="lg">C</div><h1>CeoDesk</h1>'+
+        '<p class="sub">Inicia sesión con tu cuenta <b>@'+esc((state.config&&state.config.allowedDomain)||'iwin.im')+'</b></p>'+
+        '<div id="gbtn"></div>'+
+        '<div class="login-msg">'+esc(msg||'')+'</div>'+
+        '<div class="login-foot">Solo cuentas autorizadas del equipo.</div>'+
+      '</div></div>';
+    if(!state.config || !state.config.googleClientId){
+      document.querySelector('.login-msg').textContent = 'El login con Google aún no está configurado (falta GOOGLE_CLIENT_ID).';
+      return;
+    }
+    loadGsi().then(function(){
+      try{
+        google.accounts.id.initialize({ client_id: state.config.googleClientId, callback: onGoogle });
+        google.accounts.id.renderButton(document.getElementById('gbtn'), { type:'standard', theme:'filled_blue', size:'large', shape:'pill', text:'signin_with', width:280 });
+      }catch(e){ document.querySelector('.login-msg').textContent='No se pudo cargar Google Sign-In.'; }
+    });
+  }
+  function loadGsi(){
+    return new Promise(function(resolve){
+      if(window.google && google.accounts && google.accounts.id) return resolve();
+      var s=document.getElementById('gsi'); if(!s){ s=document.createElement('script'); s.id='gsi'; s.src='https://accounts.google.com/gsi/client'; s.async=true; document.head.appendChild(s); }
+      s.addEventListener('load',function(){resolve();});
+      var t=setInterval(function(){ if(window.google&&google.accounts&&google.accounts.id){clearInterval(t);resolve();} },150);
+    });
+  }
+  function onGoogle(resp){
+    var m=document.querySelector('.login-msg'); if(m) m.textContent='Verificando…';
+    api('/google-login',{ method:'POST', body:{ credential: resp.credential } }).then(function(out){
+      state.token=out.token; state.user=out.user; sessionStorage.setItem(TOKEN_KEY,out.token);
+      loadAndStart();
+    }).catch(function(e){ if(m) m.textContent=e.message; });
+  }
+  function logout(){ sessionStorage.removeItem(TOKEN_KEY); state.token=null; state.user=null; state.loaded=false; location.hash=''; showLogin(); }
+
+  // ---------- shell + router ----------
+  function render(){
+    if(!state.user){ showLogin(); return; }
+    var me = state.user.email;
+    var inboxOpen = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).length;
+    var myOpen = state.requests.filter(function(r){return r.requesterId===me && isOpen(r.status);}).length;
+    var route = location.hash || '#/bandeja';
+
+    var nav = '';
+    nav += navItem('#/bandeja','📥','Mi trabajo', inboxOpen, route);
+    nav += navItem('#/tablero','📊','Tablero', 0, route);
+    if(state.gtasksEnabled && (state.user.role==='ceo' || state.user.sup)){
+      var gtOpen = (state.gtasks||[]).filter(function(t){return t.status!=='done';}).length;
+      nav += navItem('#/google-tasks','✅','Google Tasks', gtOpen, route);
+    }
+    if(state.user.sup){
+      var supOpen = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me && isOpen(r.status);}).length;
+      nav += navItem('#/supervision','👁','Supervisión', supOpen, route);
+    }
+    nav += navItem('#/nueva','➕','Nueva solicitud', 0, route);
+    nav += navItem('#/mis','📤','Mis solicitudes', myOpen, route);
+    if(state.user.sup) nav += navItem('#/metricas','📈','Métricas', 0, route);
+    nav += navItem('#/historial','🗂️','Historial', 0, route);
+    if(state.user.fin || state.user.role==='ceo') nav += navItem('#/fiscal','📅','Cumplimiento Fiscal', 0, route);
+
+    var view = renderRoute(route);
+
+    root.innerHTML =
+      '<div class="app">'+
+        '<aside class="side" id="side">'+
+          '<div class="side__brand"><span class="side__logo">C</span> CeoDesk</div>'+
+          '<nav onclick="CeoDesk.closeMenu()">'+nav+'</nav>'+
+          '<div class="side__foot"><b>'+esc(state.user.name)+'</b><br>'+esc(state.user.role==='ceo'?'CEO':(state.user.title||'Líder'))+'</div>'+
+        '</aside>'+
+        '<div class="main">'+
+          '<header class="top">'+
+            '<button class="iconbtn menu-btn" onclick="CeoDesk.toggleMenu()">☰</button>'+
+            '<div class="top__title">'+esc(view.title)+'</div><div class="top__spacer"></div>'+
+            '<div class="who">'+avatar(state.user.name)+'<div class="who__meta"><div class="who__name">'+esc(state.user.name)+'</div><div class="who__role">'+esc(state.user.role==='ceo'?'CEO':(state.user.title||'Líder'))+'</div></div></div>'+
+            '<button class="iconbtn" onclick="CeoDesk.logout()" title="Cerrar sesión" style="margin-left:6px">Salir</button>'+
+          '</header>'+
+          '<main class="content">'+view.html+'</main>'+
+        '</div>'+
+      '</div>';
+    if(view.after) view.after();
+  }
+  function navItem(href,ic,label,count,route){
+    var on = route===href || (href==='#/bandeja'&&route==='#/') ? ' on':'';
+    return '<a class="nav'+on+'" href="'+href+'"><span class="ic">'+ic+'</span> '+label+(count>0?'<span class="count">'+count+'</span>':'')+'</a>';
+  }
+  function renderRoute(route){
+    if(route.indexOf('#/solicitud/')===0) return viewDetail(route.slice('#/solicitud/'.length));
+    if(route==='#/nueva') return viewNew();
+    if(route==='#/mis') return viewMine();
+    if(route==='#/supervision') return viewSupervision();
+    if(route==='#/tablero') return viewBoard();
+    if(route==='#/metricas') return viewMetrics();
+    if(route==='#/historial') return viewHistory();
+    if(route==='#/google-tasks') return viewGoogleTasks();
+    if(route==='#/fiscal') return (state.user.fin || state.user.role==='ceo') ? viewFiscal() : { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">🔒</div><p>No tienes acceso a esta sección. Contacta al CEO si crees que deberías verla.</p></div>' };
+    return viewInbox(); // #/bandeja para todos
+  }
+
+  // ---------- views ----------
+  function requestRow(r){
+    var me = state.user && state.user.email;
+    // Marca los ítems que son de mi principal (los que atiendo en su nombre).
+    var forPrincipal = me && r.assigneeId!==me && iAssist(r.assigneeId);
+    var assistTag = forPrincipal ? '<span class="badge b-brand bdot">En nombre de '+esc((r.assigneeName||'').split(' ')[0])+'</span>' : '';
+    return '<a class="row'+(forPrincipal?' row--assist':'')+'" href="#/solicitud/'+encodeURIComponent(r.id)+'">'+
+      '<span class="prio" style="background:'+PRIO_COLOR[r.priority]+'"></span>'+
+      avatar(r.requesterName)+
+      '<span class="rmain"><span class="rtitle"><span class="rcode">'+esc(r.code)+'</span> '+esc(r.title)+'</span>'+
+        '<span class="rmeta"><span>'+esc(r.requesterName)+'</span><span>→</span><span>'+esc(r.assigneeName||'')+'</span><span>·</span><span>'+esc(rel(r.createdAt))+'</span>'+
+        (r.documentName?'<span>·</span><span>📎 '+esc(r.documentName)+'</span>':'')+
+        (r.labels&&r.labels.length?'<span>·</span>'+labelChips(r):'')+'</span></span>'+
+      '<span class="rside">'+assistTag+typeBadge(r.type)+statusBadge(r.status)+dueBadge(r.dueDate)+'</span></a>';
+  }
+  function prioRank(p){ return {urgent:0,high:1,medium:2,low:3}[p]; }
+
+  // ---- Google Tasks (hub compartido con LADCC) ----
+  var GT_STATUS = { todo:['Por hacer','b-slate'], doing:['En curso','b-blue'], blocked:['Bloqueada','b-amber'], done:['Hecha','b-green'] };
+  var GT_META_LBL = { cat:'Categoría', imp:'Importancia', urg:'Urgencia' };
+  function gtCard(t){
+    var st = GT_STATUS[t.status] || GT_STATUS.todo;
+    var meta='';
+    meta += '<span class="badge b-brand">'+esc(t.listName)+'</span>';
+    if(t.meta){ ['cat','imp','urg'].forEach(function(k){ if(t.meta[k]) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(GT_META_LBL[k])+': '+esc(t.meta[k])+'</span>'; }); }
+    if(t.fingerprint) meta += '<span class="chip" style="padding:3px 10px;font-size:11.5px" title="Sincronizada con LADCC">🔗 '+esc(t.fingerprint)+'</span>';
+    var due = t.due?'<span class="due '+dueInfo(t.due).tone+'">'+esc(dueInfo(t.due).label)+'</span>':'';
+    var acts='';
+    if(t.status!=='done'){
+      if(t.status==='todo') acts+='<button class="btn" onclick="CeoDesk.gtAct(\'start\',\''+t.gid+'\',\''+t.listId+'\')">Empezar</button>';
+      if(t.status==='doing') acts+='<button class="btn" onclick="CeoDesk.gtAct(\'block\',\''+t.gid+'\',\''+t.listId+'\')">Bloquear</button>';
+      if(t.status==='blocked') acts+='<button class="btn" onclick="CeoDesk.gtAct(\'resume\',\''+t.gid+'\',\''+t.listId+'\')">Reanudar</button>';
+      acts+='<button class="btn btn--primary" onclick="CeoDesk.gtAct(\'complete\',\''+t.gid+'\',\''+t.listId+'\')">Completar</button>';
+    }
+    return '<div class="gt-card'+(t.status==='done'?' done':'')+'">'+
+      '<div class="gt-main"><div class="gt-title">'+esc(t.title)+'</div>'+
+        (t.description?'<div class="gt-desc">'+esc(t.description)+'</div>':'')+
+        '<div class="gt-meta"><span class="badge '+st[1]+' bdot">'+st[0]+'</span>'+meta+(due?due:'')+'</div></div>'+
+      '<div class="gt-act">'+acts+'</div></div>';
+  }
+  function gtSection(){
+    var isCeoUser = state.user.role==='ceo';
+    if(!(isCeoUser || state.user.sup) || !state.gtasksEnabled) return '';
+    var sub = isCeoUser ? '— tu sistema personal (6 listas), sincronizado con LADCC' : '— tus tareas de Google Tasks';
+    // Líder que aún no ha conectado: mostrar el opt-in.
+    if(!isCeoUser && !state.gtasksConnected){
+      return '<div class="rowlbl" style="margin-top:26px">Google Tasks '+
+        '<span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">'+sub+'</span></div>'+
+        '<div class="gt-add" style="justify-content:space-between">'+
+          '<span style="color:var(--muted);font-size:13px">Conecta tu cuenta de Google para ver y gestionar tus tareas de Google Tasks aquí, junto a tu trabajo de CeoDesk.</span>'+
+          '<button class="btn btn--primary" onclick="CeoDesk.gtConnect()"'+(state.gtBusy?' disabled':'')+'>🔗 Conectar Google Tasks</button>'+
+        '</div>';
+    }
+    var lists = (state.gtasksLists&&state.gtasksLists.length) ? state.gtasksLists
+      : (isCeoUser ? ['Superlikers','LADCC','DCDG','LIH','La Isabella','DCC'] : []);
+    var listSel = lists.length ? '<select id="gt-list">'+lists.map(function(l){return '<option value="'+esc(l)+'">'+esc(l)+'</option>';}).join('')+'</select>' : '';
+    var metaSel = '';
+    if(isCeoUser){
+      var impOpts = '<option value="">Importancia…</option>'+['Alta','Media','Baja'].map(function(v){return '<option>'+v+'</option>';}).join('');
+      var urgOpts = '<option value="">Urgencia…</option>'+['Hoy','Pronto','Esta semana','Sin prisa'].map(function(v){return '<option>'+v+'</option>';}).join('');
+      metaSel = '<select id="gt-imp">'+impOpts+'</select><select id="gt-urg">'+urgOpts+'</select>';
+    }
+    var open = state.gtasks.filter(function(t){return t.status!=='done';});
+    var add = '<div class="gt-add">'+
+      '<input id="gt-title" placeholder="Captura rápida: nueva tarea…" onkeydown="if(event.key===\'Enter\')CeoDesk.gtCreate()">'+
+      listSel+metaSel+
+      '<button class="btn btn--primary" onclick="CeoDesk.gtCreate()"'+(state.gtBusy?' disabled':'')+'>＋ Añadir</button></div>';
+    var list = open.length ? '<div class="rows">'+open.map(gtCard).join('')+'</div>'
+      : '<p style="color:var(--muted);font-size:13px">Sin tareas de Google pendientes.</p>';
+    var disconnect = isCeoUser ? '' : ' <a class="link" style="font-size:12px;font-weight:600;cursor:pointer" onclick="CeoDesk.gtDisconnect()">Desconectar</a>';
+    return '<div class="rowlbl" style="margin-top:26px">Google Tasks · '+open.length+
+      ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">'+sub+'</span>'+disconnect+'</div>'+add+list;
+  }
+
+  // ---- Jira (espejo vivo, lectura) ----
+  function jiraCard(it){
+    var st = GT_STATUS[it.status] || GT_STATUS.todo;
+    var due = it.due?'<span class="due '+dueInfo(it.due).tone+'">'+esc(dueInfo(it.due).label)+'</span>':'';
+    var meta = '<span class="badge b-brand">'+esc(it.key)+'</span>';
+    if(it.jiraStatus) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(it.jiraStatus)+'</span>';
+    if(it.type) meta+='<span class="chip" style="padding:3px 10px;font-size:11.5px">'+esc(it.type)+'</span>';
+    var act = it.url?'<a class="btn" href="'+esc(it.url)+'" target="_blank" rel="noopener">Abrir en Jira ↗</a>':'';
+    return '<div class="gt-card">'+
+      '<div class="gt-main"><div class="gt-title">'+esc(it.summary)+'</div>'+
+        '<div class="gt-meta"><span class="badge '+st[1]+' bdot">'+st[0]+'</span>'+meta+(due?due:'')+'</div></div>'+
+      '<div class="gt-act">'+act+'</div></div>';
+  }
+  function jiraSection(){
+    if(!state.jiraEnabled) return '';
+    if(!state.jiraConnected){
+      return '<div class="rowlbl" style="margin-top:26px">Jira '+
+        '<span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— importa tus tareas asignadas en Jira</span></div>'+
+        '<div class="gt-add" style="justify-content:space-between">'+
+          '<span style="color:var(--muted);font-size:13px">Conecta tu cuenta de Jira para ver aquí tus issues asignados, siempre al día.</span>'+
+          '<button class="btn btn--primary" onclick="CeoDesk.jiraConnect()"'+(state.jiraBusy?' disabled':'')+'>🔗 Conectar Jira</button>'+
+        '</div>';
+    }
+    var open = state.jira;
+    var list = open.length ? '<div class="rows">'+open.map(jiraCard).join('')+'</div>'
+      : '<p style="color:var(--muted);font-size:13px">No tienes issues abiertos asignados en Jira.</p>';
+    var site = state.jiraSite?' · '+esc(state.jiraSite):'';
+    return '<div class="rowlbl" style="margin-top:26px">Jira · '+open.length+
+      ' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--faint)">— tus issues asignados'+site+'</span>'+
+      ' <a class="link" style="font-size:12px;font-weight:600;cursor:pointer" onclick="CeoDesk.jiraDisconnect()">Desconectar</a></div>'+list;
+  }
+
+  function viewInbox(){
+    var me = state.user.email;
+    var assisting = state.user.asst && state.user.asst.length;
+    var open = state.requests.filter(function(r){return isInboxItem(r,me) && isOpen(r.status);}).sort(function(a,b){
+      if(a.dueDate&&b.dueDate&&a.dueDate!==b.dueDate) return a.dueDate<b.dueDate?-1:1;
+      if(a.dueDate&&!b.dueDate) return -1; if(!a.dueDate&&b.dueDate) return 1;
+      return prioRank(a.priority)-prioRank(b.priority);
+    });
+    var overdue=open.filter(function(r){return r.dueDate&&new Date(r.dueDate)<Date.now();}).length;
+    var urgent=open.filter(function(r){return r.priority==='urgent';}).length;
+    var needInfo=open.filter(function(r){return r.status==='info_requested';}).length;
+    var f=state.listFilter;
+    var filtered = f==='all'?open:open.filter(function(r){return r.type===f;});
+    var chips = '<button class="chip'+(f==='all'?' on':'')+'" onclick="CeoDesk.setFilter(\'all\')">Todas</button>';
+    Object.keys(TYPE).forEach(function(t){ chips+='<button class="chip'+(f===t?' on':'')+'" onclick="CeoDesk.setFilter(\''+t+'\')">'+TYPE[t]+'</button>'; });
+    var list = filtered.length ? '<div class="rows">'+filtered.map(requestRow).join('')+'</div>'
+      : '<div class="empty"><div class="ic">🎉</div><p>No hay nada pendiente. Bandeja al día.</p></div>';
+    var lead = assisting
+      ? 'Lo que te asignaron y lo asignado a quien asistes: puedes actuar en su nombre para evacuarlo.'
+      : 'Todo lo que te asignaron: tareas, lecturas, aprobaciones, firmas y decisiones, en un solo lugar.';
+    return { title:'Mi trabajo', html:
+      '<div class="phead"><h1>Mi trabajo</h1><p>'+lead+'</p></div>'+
+      '<div class="stats">'+stat('Pendientes',open.length)+stat('Vencidas',overdue,overdue?'danger':'')+stat('Urgentes',urgent,urgent?'warn':'')+stat('Esperando respuesta',needInfo)+'</div>'+
+      '<div class="toolbar">'+chips+'</div>'+list+jiraSection() };
+  }
+  // Google Tasks en su propia pestaña (separado de las solicitudes de CeoDesk).
+  function viewGoogleTasks(){
+    var body = gtSection();
+    if(!body) body = '<div class="empty"><div class="ic">✅</div><p>Google Tasks no está disponible para tu cuenta.</p></div>';
+    return { title:'Google Tasks', html:
+      '<div class="phead"><h1>Google Tasks</h1><p>Tus tareas de Google Tasks, separadas de las solicitudes que te asigna el equipo en CeoDesk.</p></div>'+body };
+  }
+  function stat(label,val,cls){ return '<div class="stat"><div class="stat__label">'+label+'</div><div class="stat__value '+(cls||'')+'">'+val+'</div></div>'; }
+
+  function viewMine(){
+    var mine = state.requests.filter(function(r){return r.requesterId===state.user.email;}).sort(function(a,b){return a.createdAt<b.createdAt?1:-1;});
+    var open=mine.filter(function(r){return isOpen(r.status);}), closed=mine.filter(function(r){return !isOpen(r.status);});
+    var html='<div class="phead"><h1>Mis solicitudes</h1><p>Lo que enviaste a otras personas y en qué va cada cosa. Sin perseguir por chat.</p></div>';
+    if(!mine.length){ html+='<div class="empty"><div class="ic">📭</div><p>Aún no has creado solicitudes. <a class="link" href="#/nueva">Crea la primera</a>.</p></div>'; return {title:'Mis solicitudes',html:html}; }
+    html+='<div class="rowlbl">En curso · '+open.length+'</div>';
+    html+= open.length?'<div class="rows" style="margin-bottom:24px">'+open.map(requestRow).join('')+'</div>':'<p style="color:var(--muted);margin-bottom:24px">Nada en curso.</p>';
+    if(closed.length){ html+='<div class="rowlbl">Resueltas · '+closed.length+'</div><div class="rows">'+closed.map(requestRow).join('')+'</div>'; }
+    return {title:'Mis solicitudes',html:html};
+  }
+
+  // Vista de supervisión (solo lectura): solicitudes de las personas asignadas
+  // al delegado. No incluye las propias (esas van en "Mis solicitudes").
+  function viewSupervision(){
+    var me = state.user.email;
+    var others = state.requests.filter(function(r){return r.requesterId!==me && r.assigneeId!==me;})
+      .sort(function(a,b){return a.createdAt<b.createdAt?1:-1;});
+    var open=others.filter(function(r){return isOpen(r.status);}), closed=others.filter(function(r){return !isOpen(r.status);});
+    var html='<div class="phead"><h1>Supervisión</h1><p>Solicitudes de tu equipo asignado. Vista de solo lectura: la decisión la toma el CEO.</p></div>';
+    if(!others.length){ html+='<div class="empty"><div class="ic">👁</div><p>No hay solicitudes de tu equipo por ahora.</p></div>'; return {title:'Supervisión',html:html}; }
+    html+='<div class="rowlbl">En curso · '+open.length+'</div>';
+    html+= open.length?'<div class="rows" style="margin-bottom:24px">'+open.map(requestRow).join('')+'</div>':'<p style="color:var(--muted);margin-bottom:24px">Nada en curso.</p>';
+    if(closed.length){ html+='<div class="rowlbl">Resueltas · '+closed.length+'</div><div class="rows">'+closed.map(requestRow).join('')+'</div>'; }
+    return {title:'Supervisión',html:html};
+  }
+
+  function viewHistory(){
+    var closed = state.requests.filter(function(r){return !isOpen(r.status);}).sort(function(a,b){var x=a.decidedAt||a.updatedAt,y=b.decidedAt||b.updatedAt;return x<y?1:-1;});
+    var signed=closed.filter(function(r){return r.status==='signed';}).length;
+    var approved=closed.filter(function(r){return r.status==='approved';}).length;
+    var rejected=closed.filter(function(r){return r.status==='rejected';}).length;
+    var dec=closed.filter(function(r){return r.decidedAt;});
+    var avg=dec.length?dec.reduce(function(s,r){return s+(new Date(r.decidedAt)-new Date(r.createdAt))/DAY;},0)/dec.length:0;
+    var f=state.histFilter;
+    var filtered=(f==='all')?closed:closed.filter(function(r){return r.status===f;});
+    var chips='<button class="chip'+(f==='all'?' on':'')+'" onclick="CeoDesk.setHist(\'all\')">Todas</button>';
+    ['signed','approved','rejected','cancelled'].forEach(function(s){ chips+='<button class="chip'+(f===s?' on':'')+'" onclick="CeoDesk.setHist(\''+s+'\')">'+STATUS[s]+'</button>'; });
+    var list=filtered.length?'<div class="rows">'+filtered.map(requestRow).join('')+'</div>':'<div class="empty"><div class="ic">🗂️</div><p>Aún no hay decisiones registradas.</p></div>';
+    return { title:'Historial y auditoría', html:
+      '<div class="phead"><h1>Historial y auditoría</h1><p>Registro trazable de cada decisión: quién, qué, cuándo y sobre qué versión.</p></div>'+
+      '<div class="stats">'+stat('Firmadas',signed)+stat('Aprobadas',approved)+stat('Rechazadas',rejected)+
+        '<div class="stat"><div class="stat__label">Tiempo medio decisión</div><div class="stat__value">'+avg.toFixed(1)+'<span style="font-size:15px;font-weight:600;color:var(--muted)"> días</span></div></div></div>'+
+      '<div class="toolbar">'+chips+'</div>'+list };
+  }
+
+  // ---------- Métricas ----------
+  function countBy(arr, fn){ var m={}; arr.forEach(function(x){ var k=fn(x)||'—'; m[k]=(m[k]||0)+1; }); return Object.keys(m).map(function(k){return [k,m[k]];}).sort(function(a,b){return b[1]-a[1];}); }
+  function barList(pairs){ if(!pairs.length) return '<p style="color:var(--muted);font-size:13px">Sin datos.</p>'; var max=1; pairs.forEach(function(p){ if(p[1]>max) max=p[1]; }); return pairs.map(function(p){ var w=Math.round(p[1]/max*100); return '<div class="mrow"><div class="mrow__label" title="'+esc(p[0])+'">'+esc(p[0])+'</div><div class="mrow__bar"><div class="mrow__fill" style="width:'+w+'%"></div></div><div class="mrow__val">'+p[1]+'</div></div>'; }).join(''); }
+  function viewMetrics(){
+    var reqs=state.requests;
+    var openItems=reqs.filter(function(r){return isOpen(r.status);});
+    var overdue=openItems.filter(function(r){return r.dueDate&&new Date(r.dueDate)<Date.now();});
+    var dec=reqs.filter(function(r){return r.decidedAt;});
+    var avg=dec.length?dec.reduce(function(s,r){return s+(new Date(r.decidedAt)-new Date(r.createdAt))/86400000;},0)/dec.length:0;
+    var withDue=dec.filter(function(r){return r.dueDate;});
+    var onTime=withDue.filter(function(r){return new Date(r.decidedAt)<=new Date(r.dueDate);});
+    var pct=withDue.length?Math.round(onTime.length/withDue.length*100):null;
+    var byPerson=countBy(openItems,function(r){return r.assigneeName||r.assigneeId;}).slice(0,10);
+    var byArea=countBy(openItems,function(r){return r.area||'Sin área';});
+    var byType=countBy(openItems,function(r){return TYPE[r.type]||r.type;});
+    var byStatus=countBy(openItems,function(r){return STATUS[r.status]||r.status;});
+    var stats='<div class="stats">'+
+      stat('Abiertos',openItems.length)+
+      stat('Vencidos',overdue.length,overdue.length?'danger':'')+
+      '<div class="stat"><div class="stat__label">Tiempo medio</div><div class="stat__value">'+avg.toFixed(1)+'<span style="font-size:15px;font-weight:600;color:var(--muted)"> d</span></div></div>'+
+      '<div class="stat"><div class="stat__label">Cumplimiento fecha</div><div class="stat__value">'+(pct===null?'—':pct+'%')+'</div></div>'+
+    '</div>';
+    var grid='<div class="mgrid">'+
+      '<div class="mcard"><h3>Carga por persona (abiertos)</h3>'+barList(byPerson)+'</div>'+
+      '<div class="mcard"><h3>Por área</h3>'+barList(byArea)+'</div>'+
+      '<div class="mcard"><h3>Por tipo</h3>'+barList(byType)+'</div>'+
+      '<div class="mcard"><h3>Por estado</h3>'+barList(byStatus)+'</div>'+
+    '</div>';
+    return { title:'Métricas', html:'<div class="phead"><h1>Métricas</h1><p>Panorama del trabajo que puedes ver: carga, áreas, tiempos y cumplimiento.</p></div>'+stats+grid };
+  }
+
+  // ---------- Tablero Kanban (Tareas / Incidencias) ----------
+  var BOARD_KINDS = {
+    task:{ label:'Tareas', type:'task', cols:[['todo','Por hacer'],['doing','En curso'],['blocked','Bloqueada'],['done','Hecha']] },
+    bug:{ label:'Incidencias', type:'bug', cols:[['open','Abierta'],['doing','En curso'],['resolved','Resuelta'],['closed','Cerrada']] }
+  };
+  function boardCard(r){
+    var mine=r.assigneeId===state.user.email;
+    return '<div class="kcard" draggable="'+(mine?'true':'false')+'" data-id="'+r.id+'"'+
+      (mine?' ondragstart="CeoDesk.dragStart(event,\''+r.id+'\')"':'')+
+      ' onclick="location.hash=\'#/solicitud/'+r.id+'\'" style="border-left:3px solid '+PRIO_COLOR[r.priority]+'">'+
+      '<div class="kcard__title">'+esc(r.title)+'</div>'+
+      '<div class="kcard__meta"><span class="rcode">'+esc(r.code)+'</span>'+(r.area?' · '+esc(r.area):'')+' · '+esc(r.requesterName)+'</div>'+
+      (r.labels&&r.labels.length?'<div style="margin-top:7px">'+labelChips(r)+'</div>':'')+
+      '<div class="kcard__foot">'+avatar(r.assigneeName||'',22)+dueBadge(r.dueDate)+'</div></div>';
+  }
+  function viewBoard(){
+    var me=state.user.email;
+    var kind=BOARD_KINDS[state.boardKind]?state.boardKind:'task';
+    var K=BOARD_KINDS[kind];
+    var scope=state.boardScope||(state.user.sup?'all':'mine');
+    var area=state.boardArea||'';
+    var label=state.boardLabel||'';
+    var items0=state.requests.filter(function(r){return r.type===K.type;});
+    if(scope==='mine') items0=items0.filter(function(r){return r.assigneeId===me;});
+    if(area) items0=items0.filter(function(r){return r.area===area;});
+    if(label) items0=items0.filter(function(r){return (r.labels||[]).indexOf(label)>=0;});
+    var areaOpts='<option value="">Todas las áreas</option>'+((state.config&&state.config.areas)||[]).map(function(a){return '<option'+(a===area?' selected':'')+'>'+esc(a)+'</option>';}).join('');
+    var labelOpts='<option value="">Todas las etiquetas</option>'+allLabels().map(function(l){return '<option'+(l===label?' selected':'')+'>'+esc(l)+'</option>';}).join('');
+    var kindChips=Object.keys(BOARD_KINDS).map(function(k){return '<button class="chip'+(k===kind?' on':'')+'" onclick="CeoDesk.boardKind(\''+k+'\')">'+BOARD_KINDS[k].label+'</button>';}).join('');
+    var toolbar='<div class="toolbar">'+kindChips+
+      '<span style="width:12px"></span>'+
+      '<button class="chip'+(scope==='mine'?' on':'')+'" onclick="CeoDesk.boardScope(\'mine\')">Míos</button>'+
+      (state.user.sup?'<button class="chip'+(scope==='all'?' on':'')+'" onclick="CeoDesk.boardScope(\'all\')">Los que veo</button>':'')+
+      '<select class="sel" style="width:auto;margin-left:auto" onchange="CeoDesk.boardArea(this.value)">'+areaOpts+'</select>'+
+      '<select class="sel" style="width:auto" onchange="CeoDesk.boardLabel(this.value)">'+labelOpts+'</select>'+
+    '</div>';
+    var views=loadViews();
+    var savedRow='<div class="toolbar">'+
+      views.map(function(v,i){return '<button class="chip" onclick="CeoDesk.applyView('+i+')">'+esc(v.name)+' <b onclick="event.stopPropagation();CeoDesk.delView('+i+')" style="opacity:.55;font-weight:800">×</b></button>';}).join('')+
+      '<button class="chip" onclick="CeoDesk.saveView()">＋ Guardar vista actual</button>'+
+    '</div>';
+    var board='<div class="kanban">'+K.cols.map(function(c){
+      var items=items0.filter(function(r){return r.status===c[0];});
+      var cards=items.map(boardCard).join('');
+      return '<div class="kcol" data-status="'+c[0]+'" ondragover="CeoDesk.dragOver(event,this)" ondragleave="CeoDesk.dragLeave(this)" ondrop="CeoDesk.drop(event,\''+c[0]+'\',this)">'+
+        '<div class="kcol__head">'+c[1]+' <span class="kcount">'+items.length+'</span></div>'+
+        '<div class="kcol__body">'+(cards||'<div class="kempty">—</div>')+'</div></div>';
+    }).join('')+'</div>';
+    return { title:'Tablero', html:'<div class="phead"><h1>Tablero</h1><p>'+(kind==='bug'?'Incidencias':'Tareas')+' por estado. Arrastra una tarjeta para moverla (solo si es tuya).</p></div>'+toolbar+savedRow+board };
+  }
+  function loadViews(){ try{ return JSON.parse(localStorage.getItem('ceodesk_views')||'[]'); }catch(e){ return []; } }
+  function saveViews(v){ try{ localStorage.setItem('ceodesk_views', JSON.stringify(v)); }catch(e){} }
+  var DRAG={id:null,from:null};
+  function colAction(kind,from,to){
+    if(from===to) return null;
+    if(kind==='task'){
+      if(to==='doing'){ if(from==='todo') return 'start'; if(from==='blocked') return 'resume'; }
+      if(to==='done' && from==='doing') return 'complete';
+      if(to==='blocked' && (from==='todo'||from==='doing')) return 'block';
+    } else {
+      if(to==='doing'){ if(from==='open') return 'start'; if(from==='blocked') return 'resume'; }
+      if(to==='resolved' && from==='doing') return 'resolve';
+      if(to==='blocked' && (from==='open'||from==='doing')) return 'block';
+    }
+    return null;
+  }
+  function dragStart(e,id){ DRAG.id=id; var r=findReq(id); DRAG.from=r?r.status:null; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';} }
+  function dragOver(e,col){ e.preventDefault(); if(e.dataTransfer) e.dataTransfer.dropEffect='move'; if(col) col.classList.add('over'); }
+  function dragLeave(col){ if(col) col.classList.remove('over'); }
+  function drop(e,toStatus,col){ e.preventDefault(); if(col) col.classList.remove('over');
+    var id=DRAG.id, from=DRAG.from; DRAG.id=null; DRAG.from=null;
+    if(!id) return;
+    var action=colAction(BOARD_KINDS[state.boardKind]?state.boardKind:'task', from, toStatus);
+    if(!action){ toast('Ese movimiento no está permitido.'); return; }
+    act(id, action);
+  }
+
+  function viewNew(){
+    var after=function(){ NewForm.mount(); };
+    var rosterOpts = '<option value="" disabled selected>Elige a la persona…</option>'+
+      state.roster.map(function(p){ return '<option value="'+esc(p.email)+'">'+esc(p.name)+' — '+esc(p.email)+'</option>'; }).join('');
+    var areaOpts = ((state.config&&state.config.areas)||[]).map(function(a){ return '<option>'+esc(a)+'</option>'; }).join('');
+    var labelDatalist = allLabels().map(function(l){ return '<option value="'+esc(l)+'"></option>'; }).join('');
+    return { title:'Nueva solicitud', after:after, html:
+      '<div class="phead"><h1>Nueva solicitud de decisión</h1><p>Pídele a cualquier persona que lea, apruebe, firme o decida. El contexto es obligatorio: así la decisión se toma con el debido proceso.</p></div>'+
+      '<form class="card" id="newform" style="padding:24px;max-width:760px" onsubmit="return false">'+
+        '<div class="field"><label>¿Qué necesitas?</label><div class="typegrid" id="typegrid">'+
+          Object.keys(TYPE).map(function(t){ return '<button type="button" class="topt'+(t==='task'?' on':'')+'" data-type="'+t+'"><span class="ti">'+TYPE_ICON[t]+'</span>'+TYPE[t]+'</button>'; }).join('')+
+        '</div></div>'+
+        '<div class="field"><label for="f-to">¿A quién se lo pides? *</label><div class="hint">Cualquier persona de Superlikers.</div><select id="f-to" class="sel">'+rosterOpts+'</select></div>'+
+        '<div class="field"><label for="f-title">Título *</label><input id="f-title" class="inp" maxlength="120" placeholder="Ej. Contrato de alianza con RappiPay"></div>'+
+        '<div class="two"><div class="field"><label for="f-prio">Prioridad</label><select id="f-prio" class="sel">'+
+          Object.keys(PRIO).map(function(p){return '<option value="'+p+'"'+(p==='medium'?' selected':'')+'>'+PRIO[p]+'</option>';}).join('')+'</select></div>'+
+          '<div class="field"><label for="f-due">Fecha límite</label><input id="f-due" type="date" class="inp"></div></div>'+
+        '<div class="field"><label for="f-area">Área / Proyecto</label><select id="f-area" class="sel"><option value="">— Sin área —</option>'+areaOpts+'</select></div>'+
+        '<div class="field"><label for="f-lbl">Etiquetas</label><div class="hint">Escribe y Enter (o coma). Autocompleta con las ya usadas.</div><div class="taginput" id="f-tags"><input id="f-lbl" list="f-lbl-list" placeholder="ej. campaña-Q3, deuda-técnica"></div><datalist id="f-lbl-list">'+labelDatalist+'</datalist></div>'+
+        '<div class="field"><label for="f-ctx">Descripción / contexto *</label><div class="hint">Explica qué es y da el trasfondo suficiente.</div><textarea id="f-ctx" class="ta"></textarea></div>'+
+        '<div id="decision-fields">'+
+        '<div class="field"><label for="f-rec">Tu recomendación *</label><div class="hint">No traigas solo el problema — trae tu propuesta.</div><textarea id="f-rec" class="ta"></textarea></div>'+
+        '<div class="field"><label for="f-imp">Impacto y urgencia *</label><div class="hint">¿Qué pasa si se aprueba? ¿Y si no se decide a tiempo?</div><textarea id="f-imp" class="ta"></textarea></div>'+
+        '</div>'+
+        '<div class="field"><label for="f-doc">Documento (nombre)</label><input id="f-doc" class="inp" placeholder="Ej. Contrato_RappiPay_v3.pdf"></div>'+
+        '<div class="two"><div class="field"><label for="f-url">Enlace al documento</label><input id="f-url" class="inp" placeholder="https://drive.google.com/…"></div>'+
+          '<div class="field"><label for="f-ver">Versión</label><input id="f-ver" class="inp" placeholder="Ej. v3 (rev. legal 12-jul)"></div></div>'+
+        '<div class="banner" id="f-err" style="display:none;background:var(--red-soft);color:#b91c1c;border-color:#f6cccc"></div>'+
+        '<div style="display:flex;gap:10px"><button class="btn btn--primary" id="f-submit" type="button">Enviar solicitud</button>'+
+          '<a class="btn" href="#/mis">Cancelar</a></div>'+
+      '</form>' };
+  }
+
+  function viewDetail(id){
+    var r = findReq(id);
+    if(!r){ return { title:'Solicitud', html:'<div class="empty"><div class="ic">🔍</div><p>No encontramos esa solicitud.</p><a class="link" href="#/">Volver</a></div>' }; }
+    var isAssignee = r.assigneeId===state.user.email || iAssist(r.assigneeId);
+    var isRequester = r.requesterId===state.user.email;
+    var open=isOpen(r.status);
+    // acciones del destinatario
+    var actions='';
+    if(isAssignee && open){
+      var A=[];
+      if(r.type==='task'){
+        if(r.status==='todo') A=[['start','Empezar','btn--primary'],['block','Bloquear','btn--red']];
+        else if(r.status==='doing') A=[['complete','Marcar hecha','btn--green'],['block','Bloquear','btn--red']];
+        else if(r.status==='blocked') A=[['resume','Reanudar','btn--primary']];
+      } else if(r.type==='bug'){
+        if(r.status==='open') A=[['start','Empezar','btn--primary'],['block','Bloquear','btn--red']];
+        else if(r.status==='doing') A=[['resolve','Marcar resuelta','btn--green'],['block','Bloquear','btn--red']];
+        else if(r.status==='blocked') A=[['resume','Reanudar','btn--primary']];
+      } else if(r.type==='read'){
+        A=[['mark_read','Marcar leída','btn--green']];
+      } else if(r.type==='sign'){
+        A=[['sign','Firmar','btn--green'],['request_info','Pedir más información','btn--primary'],['reject','Rechazar','btn--red']];
+      } else {
+        A=[['approve','Aprobar','btn--green'],['request_info','Pedir más información','btn--primary'],['reject','Rechazar','btn--red']];
+      }
+      if(A.length){
+        var heading=(DECISION_TYPES.indexOf(r.type)>=0)?'Tu decisión':'Acciones';
+        var btns=A.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
+        actions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">'+heading+'</h3><div class="actionbar">'+btns+'</div></div>';
+      }
+    }
+    var reqActions='';
+    if(isRequester && r.type==='bug'){
+      var RA=[];
+      if(r.status==='resolved') RA=[['close','Cerrar (verificado)','btn--green'],['reopen','Reabrir','btn--red']];
+      else if(r.status==='closed') RA=[['reopen','Reabrir','btn--primary']];
+      if(RA.length){
+        var rb=RA.map(function(a){ return '<button class="btn '+a[2]+'" onclick="CeoDesk.act(\''+r.id+'\',\''+a[0]+'\')">'+a[1]+'</button>'; }).join('');
+        reqActions='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Tu incidencia</h3><div class="actionbar">'+rb+'</div></div>';
+      }
+    }
+    // respuesta del solicitante cuando se pidió info
+    var respond='';
+    if(isRequester && r.status==='info_requested'){
+      respond='<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Te pidieron más información</h3>'+
+        '<textarea class="ta" id="respond-box" placeholder="Responde aquí para devolverla a su bandeja…"></textarea>'+
+        '<div style="margin-top:10px"><button class="btn btn--primary" onclick="CeoDesk.respond(\''+r.id+'\')">Responder y reenviar</button></div></div>';
+    }
+    var decision='';
+    if(r.decidedAt){
+      var WORD={signed:'Firmado',approved:'Aprobado',rejected:'Rechazado',done:'Completada',read:'Leída'};
+      var word=WORD[r.status]||'Resuelto';
+      decision='<div class="decision"><div class="dblock" style="margin:0"><h3>Registro</h3>'+
+        '<p style="font-weight:650">'+word+' por '+esc(r.decidedByName||'')+' · '+esc(fmtDateTime(r.decidedAt))+'</p>'+
+        (r.decisionNote?'<p style="margin-top:6px">“'+esc(r.decisionNote)+'”</p>':'')+'</div></div>';
+    }
+    var doc = r.documentName ? '<div class="dblock"><h3>Documento</h3>'+
+      (r.documentUrl?'<a class="docpill" href="'+esc(r.documentUrl)+'" target="_blank" rel="noreferrer">📄 '+esc(r.documentName)+(r.documentVersion?' · '+esc(r.documentVersion):'')+' ↗</a>'
+        :'<span class="docpill">📄 '+esc(r.documentName)+(r.documentVersion?' · '+esc(r.documentVersion):'')+'</span>')+'</div>' : '';
+    var tl = (r.events||[]).slice().sort(function(a,b){return a.createdAt<b.createdAt?-1:1;}).map(function(e){
+      return '<div class="tli '+(EVENT_ACCENT[e.type]||'')+'"><div class="th"><b>'+esc(e.actorName)+'</b> '+(EVENT[e.type]||e.type)+'</div>'+
+        '<div class="tt">'+esc(fmtDateTime(e.createdAt))+' · '+esc(rel(e.createdAt))+'</div>'+(e.note?'<div class="tn">'+esc(e.note)+'</div>':'')+'</div>';
+    }).join('');
+    var commentCard = (isAssignee || isRequester)
+      ? '<div class="card" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 10px;font-size:14px">Añadir comentario</h3>'+
+          '<textarea class="ta" id="comment-box" placeholder="Escribe una nota para el hilo…"></textarea>'+
+          '<div style="margin-top:10px"><button class="btn" onclick="CeoDesk.comment(\''+r.id+'\')">Comentar</button></div></div>'
+      : '';
+    var html=
+      '<button class="back" onclick="history.back()">← Volver</button>'+
+      '<div class="split"><div>'+
+        '<div class="card" style="padding:24px">'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'+typeBadge(r.type)+statusBadge(r.status)+prioBadge(r.priority)+'<span class="rcode">'+esc(r.code)+'</span></div>'+
+          '<h1 style="margin:0 0 '+(r.labels&&r.labels.length?'10':'16')+'px;font-size:22px">'+esc(r.title)+'</h1>'+
+          (r.labels&&r.labels.length?'<div style="margin-bottom:16px">'+labelChips(r)+'</div>':'')+
+          '<div class="dblock"><h3>'+(DECISION_TYPES.indexOf(r.type)>=0?'Contexto':'Descripción')+'</h3><p>'+esc(r.context)+'</p></div>'+
+          (r.recommendation?'<div class="dblock"><h3>Recomendación de quien solicita</h3><p>'+esc(r.recommendation)+'</p></div>':'')+
+          (r.impact?'<div class="dblock"><h3>Impacto y urgencia</h3><p>'+esc(r.impact)+'</p></div>':'')+
+          doc+decision+
+        '</div>'+actions+reqActions+respond+commentCard+
+      '</div><div>'+
+        '<div class="card" style="padding:18px">'+
+          kv('Solicita', avatar(r.requesterName,24)+' '+esc(r.requesterName), true)+
+          kv('Para', avatar(r.assigneeName||'',24)+' '+esc(r.assigneeName||''), true)+
+          (r.requesterTitle?kv('Cargo',esc(r.requesterTitle)):'')+
+          kv('Tipo',TYPE[r.type])+(r.area?kv('Área',esc(r.area)):'')+kv('Creada',fmtDate(r.createdAt))+kv('Fecha límite',dueBadge(r.dueDate))+
+        '</div>'+
+        '<div class="card" style="padding:18px;margin-top:16px"><div class="rowlbl" style="margin-top:0">Historial</div><div class="tl">'+tl+'</div></div>'+
+      '</div></div>';
+    return { title:'Detalle · '+r.code, html:html };
+  }
+  function kv(k,v,raw){ return '<div class="kv"><span class="k">'+k+'</span><span class="v" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'+v+'</span></div>'; }
+
+  function findReq(id){ for(var i=0;i<state.requests.length;i++){ if(state.requests[i].id===id) return state.requests[i]; } return null; }
+
+  // ---------- new form controller ----------
+  var NewForm = {
+    type:'task',
+    labels:[],
+    mount:function(){
+      NewForm.type='task'; NewForm.labels=[];
+      var grid=document.getElementById('typegrid');
+      NewForm.syncFields();
+      grid.addEventListener('click',function(e){ var b=e.target.closest('.topt'); if(!b) return;
+        NewForm.type=b.getAttribute('data-type');
+        Array.prototype.forEach.call(grid.children,function(c){c.classList.toggle('on',c===b);});
+        NewForm.syncFields();
+      });
+      var ti=document.getElementById('f-lbl');
+      if(ti){
+        ti.addEventListener('keydown',function(e){
+          if(e.key==='Enter'||e.key===','){ e.preventDefault(); NewForm.addLabel(ti.value); ti.value=''; }
+          else if(e.key==='Backspace'&&!ti.value&&NewForm.labels.length){ NewForm.removeLabel(NewForm.labels.length-1); }
+        });
+        ti.addEventListener('input',function(){ if(ti.value.indexOf(',')>=0){ ti.value.split(',').forEach(function(p){NewForm.addLabel(p);}); ti.value=''; } });
+        ti.addEventListener('blur',function(){ if(ti.value.trim()){ NewForm.addLabel(ti.value); ti.value=''; } });
+      }
+      document.getElementById('f-submit').addEventListener('click',NewForm.submit);
+    },
+    addLabel:function(v){ v=String(v||'').trim().slice(0,30); if(!v) return;
+      if(NewForm.labels.some(function(x){return x.toLowerCase()===v.toLowerCase();})) return;
+      if(NewForm.labels.length>=8) return; NewForm.labels.push(v); NewForm.renderTags(); },
+    removeLabel:function(i){ NewForm.labels.splice(i,1); NewForm.renderTags(); },
+    renderTags:function(){
+      var c=document.getElementById('f-tags'), ti=document.getElementById('f-lbl'); if(!c||!ti) return;
+      Array.prototype.slice.call(c.querySelectorAll('.lbl')).forEach(function(n){n.remove();});
+      NewForm.labels.forEach(function(l,i){
+        var span=document.createElement('span'); span.className='lbl'; span.textContent=l+' ';
+        var b=document.createElement('b'); b.textContent='×'; b.onclick=function(){ NewForm.removeLabel(i); };
+        span.appendChild(b); c.insertBefore(span, ti);
+      });
+    },
+    syncFields:function(){
+      var dec = DECISION_TYPES.indexOf(NewForm.type)>=0;
+      var df=document.getElementById('decision-fields'); if(df) df.style.display = dec?'block':'none';
+    },
+    submit:function(){
+      var g=function(id){return document.getElementById(id).value.trim();};
+      var body={ type:NewForm.type, title:g('f-title'), assigneeId:document.getElementById('f-to').value, priority:document.getElementById('f-prio').value,
+        area:document.getElementById('f-area').value, labels:NewForm.labels.slice(),
+        context:g('f-ctx'), recommendation:g('f-rec'), impact:g('f-imp'),
+        documentName:g('f-doc'), documentUrl:g('f-url'), documentVersion:g('f-ver'),
+        dueDate: document.getElementById('f-due').value ? new Date(document.getElementById('f-due').value).toISOString() : null };
+      var err=document.getElementById('f-err');
+      var dec = DECISION_TYPES.indexOf(NewForm.type)>=0;
+      if(!body.assigneeId){ err.textContent='Elige a quién le haces la solicitud.'; err.style.display='flex'; return; }
+      if(!body.title||!body.context||(dec && (!body.recommendation||!body.impact))){
+        err.textContent = dec
+          ? 'Completa los obligatorios: sin descripción, recomendación e impacto no se puede pedir una decisión.'
+          : 'Completa el título y la descripción.';
+        err.style.display='flex'; return;
+      }
+      var btn=document.getElementById('f-submit'); btn.disabled=true; btn.textContent='Enviando…';
+      api('/requests',{method:'POST',body:body}).then(function(d){
+        return loadRequests().then(function(){ location.hash='#/solicitud/'+encodeURIComponent(d.request.id); });
+      }).catch(function(e){ err.textContent=e.message; err.style.display='flex'; btn.disabled=false; btn.textContent='Enviar solicitud'; });
+    }
+  };
+
+  // ---------- actions ----------
+  var ACT_META = {
+    approve:{ title:'Aprobar', sub:'Quedará registrado como aprobado con tu nombre y fecha.', cta:'Aprobar', cls:'btn--green' },
+    sign:{ title:'Firmar', sub:'Se registrará tu firma sobre el documento con sello de tiempo.', cta:'Firmar', cls:'btn--green' },
+    reject:{ title:'Rechazar', sub:'Explica el motivo para que quede claro el porqué.', cta:'Rechazar', cls:'btn--red', requireNote:true },
+    request_info:{ title:'Pedir más información', sub:'Vuelve a quien lo pidió con tu pregunta.', cta:'Enviar pregunta', cls:'btn--primary', requireNote:true },
+    block:{ title:'Bloquear', sub:'Explica qué lo bloquea.', cta:'Bloquear', cls:'btn--red', requireNote:true },
+    resolve:{ title:'Marcar resuelta', sub:'Describe brevemente cómo se resolvió.', cta:'Resolver', cls:'btn--green' },
+    start:{ direct:true }, complete:{ direct:true }, resume:{ direct:true }, mark_read:{ direct:true },
+    close:{ direct:true }, reopen:{ direct:true }
+  };
+  function act(id, action){
+    var m=ACT_META[action]||{}; var r=findReq(id);
+    if(m.direct){
+      api('/request-action',{method:'POST',body:{id:id,action:action}}).then(function(){ return loadRequests(); })
+        .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+      return;
+    }
+    openModal(m.title+(r?' · '+r.code:''), m.sub, m.cta, m.cls, m.requireNote, function(note, close){
+      api('/request-action',{method:'POST',body:{id:id,action:action,note:note}}).then(function(){
+        return loadRequests();
+      }).then(function(){ close(); render(); }).catch(function(e){ close(); toast(e.message); });
+    });
+  }
+  function respond(id){
+    var box=document.getElementById('respond-box'); var note=(box&&box.value||'').trim();
+    if(!note){ box.focus(); return; }
+    api('/request-action',{method:'POST',body:{id:id,action:'provide_info',note:note}}).then(function(){ return loadRequests(); })
+      .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+  }
+  function comment(id){
+    var box=document.getElementById('comment-box'); var note=(box&&box.value||'').trim();
+    if(!note){ box.focus(); return; }
+    api('/request-action',{method:'POST',body:{id:id,action:'comment',note:note}}).then(function(){ return loadRequests(); })
+      .then(function(){ render(); }).catch(function(e){ toast(e.message); });
+  }
+
+  // ---------- modal ----------
+  function openModal(title, sub, cta, cls, requireNote, onConfirm){
+    var ov=document.createElement('div'); ov.className='overlay';
+    ov.innerHTML='<div class="modal"><h2>'+esc(title)+'</h2><p class="msub">'+esc(sub)+'</p>'+
+      '<textarea class="ta" id="modal-note" placeholder="'+(requireNote?'Escribe el motivo / la pregunta…':'Nota (opcional)…')+'"></textarea>'+
+      '<div class="modal__actions"><button class="btn" id="modal-cancel">Cancelar</button><button class="btn '+cls+'" id="modal-ok">'+esc(cta)+'</button></div></div>';
+    document.body.appendChild(ov);
+    var close=function(){ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+    ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+    document.getElementById('modal-cancel').addEventListener('click',close);
+    var noteEl=document.getElementById('modal-note'); noteEl.focus();
+    document.getElementById('modal-ok').addEventListener('click',function(){
+      var note=noteEl.value.trim(); if(requireNote&&!note){ noteEl.focus(); return; }
+      var ok=document.getElementById('modal-ok'); ok.disabled=true; ok.textContent='Guardando…';
+      onConfirm(note, close);
+    });
+  }
+  function toast(msg){ alert(msg); }
+
+  // ---------- menu (mobile) ----------
+  // ---- acciones Google Tasks ----
+  function gtCreate(){
+    if(state.gtBusy) return;
+    var ti=document.getElementById('gt-title'); if(!ti) return;
+    var title=(ti.value||'').trim(); if(!title){ ti.focus(); return; }
+    var listName=(document.getElementById('gt-list')||{}).value||'Superlikers';
+    var imp=(document.getElementById('gt-imp')||{}).value||'';
+    var urg=(document.getElementById('gt-urg')||{}).value||'';
+    state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:'create',title:title,listName:listName,imp:imp||null,urg:urg||null}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+  function gtAct(op,gid,listId){
+    if(state.gtBusy) return;
+    if(op==='complete' && !confirm('¿Marcar esta tarea como completada?')) return;
+    state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:op,gid:gid,listId:listId}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+  function gtConnect(){
+    if(state.gtBusy) return; state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:'connect'}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+  function gtDisconnect(){
+    if(state.gtBusy) return;
+    if(!confirm('¿Desconectar Google Tasks? Dejarás de ver tus tareas de Google aquí (no se borra nada en Google).')) return;
+    state.gtBusy=true;
+    api('/google-tasks',{method:'POST',body:{op:'disconnect'}})
+      .then(function(){ return loadGtasks(); })
+      .then(function(){ state.gtBusy=false; render(); })
+      .catch(function(e){ state.gtBusy=false; alert(e.message); render(); });
+  }
+
+  // ---- acciones Jira ----
+  function jiraConnect(){
+    if(state.jiraBusy) return; state.jiraBusy=true; render();
+    api('/jira-connect').then(function(d){
+      if(d.url){ window.location.href=d.url; } else { state.jiraBusy=false; render(); }
+    }).catch(function(e){ state.jiraBusy=false; alert(e.message); render(); });
+  }
+  function jiraDisconnect(){
+    if(state.jiraBusy) return;
+    if(!confirm('¿Desconectar Jira? Dejarás de ver tus issues aquí (no se modifica nada en Jira).')) return;
+    state.jiraBusy=true;
+    api('/jira',{method:'POST',body:{op:'disconnect'}})
+      .then(function(){ return loadJira(); })
+      .then(function(){ state.jiraBusy=false; render(); })
+      .catch(function(e){ state.jiraBusy=false; alert(e.message); render(); });
+  }
+
+  function toggleMenu(){ var s=document.getElementById('side'); if(s) s.classList.toggle('open'); }
+  function closeMenu(){ var s=document.getElementById('side'); if(s) s.classList.remove('open'); }
+
+  // ── Cumplimiento Fiscal ──────────────────────────────────────────────────
+  var ENTITY_LABEL = { iwin_col:'iWin SAS', superlikers_col:'Superlikers SAS', inverpinto:'InverPinto', ecosistemas:'Ecosistemas', sti_usa:'STI Inc.', iwin_llc:'iWin LLC', delca2:'Delca2 LLC', sl_mex:'Splkrs MX' };
+  var COUNTRY_FLAG = { CO:'🇨🇴', MX:'🇲🇽', US:'🇺🇸' };
+  var FREQ_LABEL = { monthly:'Mensual', bimestral:'Bimestral', quarterly:'Trimestral', annual:'Anual', one_time:'Única vez' };
+  var OB_TYPE_LABEL = { tax:'Impuesto', labor:'Laboral', reporting:'Reporte', compliance:'Cumplimiento' };
+  var MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var MONTH_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  function fiscalDueBadge(due_date, status){
+    if(status==='complied') return '<span class="badge b-green bdot">Cumplida</span>';
+    var now = new Date(); var d = new Date(due_date+'T12:00:00');
+    var diff = Math.floor((d-now)/86400000);
+    if(diff<0) return '<span class="badge b-red bdot">Vencida '+Math.abs(diff)+'d</span>';
+    if(diff===0) return '<span class="badge b-red bdot">Vence hoy</span>';
+    if(diff<=7) return '<span class="badge b-red bdot">'+diff+'d</span>';
+    if(diff<=30) return '<span class="badge b-amber bdot">'+diff+'d</span>';
+    return '<span class="badge b-slate bdot">'+diff+'d</span>';
+  }
+  function fiscalTypeBadge(t){
+    var m={tax:'b-brand',labor:'b-blue',reporting:'b-slate',compliance:'b-amber'};
+    return '<span class="badge '+(m[t]||'b-slate')+'">'+(OB_TYPE_LABEL[t]||t)+'</span>';
+  }
+  function entityBadges(ids){
+    return (ids||[]).map(function(e){ return '<span class="badge b-slate" style="font-size:11px">'+esc(ENTITY_LABEL[e]||e)+'</span>'; }).join(' ');
+  }
+  function fmtDate(s){ if(!s) return '—'; var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+  function fmtUsd(v){ if(v==null||v==='') return ''; return '$'+Number(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+  function fiscalDayColor(obs, today){
+    var hasOverdue=false, hasUpcoming=false, hasComplied=false;
+    obs.forEach(function(o){
+      if(o.status==='complied'){ hasComplied=true; return; }
+      var d=new Date(o.due_date+'T12:00:00'), diff=Math.floor((d-today)/86400000);
+      if(diff<0) hasOverdue=true;
+      else if(diff<=30) hasUpcoming=true;
+    });
+    if(hasOverdue) return 'var(--red)';
+    if(hasUpcoming) return 'var(--amber)';
+    if(hasComplied) return 'var(--green)';
+    return 'var(--brand)';
+  }
+
+  function fiscalObRow(o, today){
+    var isOverdue = o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today;
+    var isEdit = state.fiscalEditId===o.id;
+    var borderColor = isOverdue ? 'var(--red)' : (o.status==='complied' ? 'var(--green)' : 'var(--border)');
+    var html = '';
+    html += '<div class="row" id="frow-'+o.id+'" style="flex-wrap:wrap;gap:8px;border-left:3px solid '+borderColor+';'+(o.status==='complied'?'opacity:.7':'')+';">';
+    // Left: info
+    html += '<div style="min-width:0;flex:1">';
+    html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px">';
+    html += '<span style="font-size:16px">'+COUNTRY_FLAG[o.country]+'</span>';
+    html += '<span style="font-weight:700;font-size:14px">'+esc(o.obligation_name)+'</span>';
+    html += fiscalDueBadge(o.due_date, o.status);
+    html += '</div>';
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">';
+    html += entityBadges(o.entity_ids);
+    html += fiscalTypeBadge(o.obligation_type);
+    html += '<span class="badge b-slate">'+(FREQ_LABEL[o.frequency]||o.frequency)+'</span>';
+    html += '<span style="color:var(--muted);font-size:12px">Vence: <b>'+fmtDate(o.due_date)+'</b></span>';
+    if(o.compliance_date) html += '<span style="color:var(--green);font-size:12px">Cumplida: '+fmtDate(o.compliance_date)+'</span>';
+    html += '</div>';
+    if(o.notes) html += '<div style="color:var(--muted);font-size:12px;margin-top:4px">'+esc(o.notes.slice(0,120))+'</div>';
+    html += '</div>';
+    // Right: budget + actions
+    html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0;min-width:180px">';
+    if(isEdit){
+      html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">';
+      html += '<label style="font-size:12px;color:var(--muted);font-weight:600">Presupuesto USD</label>';
+      html += '<input id="fbudget-'+o.id+'" type="number" min="0" placeholder="0" value="'+(o.estimated_amount_usd!=null?o.estimated_amount_usd:'')+'" style="width:110px;border:1px solid var(--brand);border-radius:8px;padding:7px 10px;font-size:13px;background:var(--surface);color:var(--ink);font-weight:600" />';
+      html += '<button class="btn btn--primary" style="padding:7px 13px;font-size:12.5px" onclick="CeoDesk.fiscalSaveBudget(\''+o.id+'\')">Guardar</button>';
+      html += '<button class="btn" style="padding:7px 10px;font-size:12.5px" onclick="CeoDesk.fiscalCancelEdit()">✕</button>';
+      html += '</div>';
+    } else {
+      html += '<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end">';
+      if(o.estimated_amount_usd!=null && o.estimated_amount_usd!==''){
+        html += '<span style="font-weight:800;font-size:15px;color:var(--ink)">'+fmtUsd(o.estimated_amount_usd)+' USD</span>';
+      } else {
+        html += '<span style="color:var(--faint);font-size:12px;font-style:italic">sin presupuesto</span>';
+      }
+      html += '<button class="btn" style="padding:6px 10px;font-size:12px" onclick="CeoDesk.fiscalEdit(\''+o.id+'\')" title="Registrar presupuesto estimado">💰 Presupuesto</button>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:6px">';
+      if(o.status!=='complied'){
+        html += '<button class="btn btn--green" style="padding:7px 13px;font-size:12.5px;font-weight:700" onclick="CeoDesk.fiscalComply(\''+o.id+'\')">✓ Marcar cumplida</button>';
+      } else {
+        html += '<button class="btn" style="padding:7px 12px;font-size:12px;color:var(--muted)" onclick="CeoDesk.fiscalUndo(\''+o.id+'\')">↩ Deshacer</button>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function viewFiscal(){
+    if(!state.fiscalLoaded){
+      loadFiscal().then(function(){ render(); });
+      return { title:'Cumplimiento Fiscal', html:'<div class="empty"><div class="ic">⏳</div><p>Cargando obligaciones…</p></div>' };
+    }
+
+    var today = new Date();
+    var in30 = new Date(today.getTime()+30*86400000);
+    var html = '';
+
+    html += '<div class="phead"><h1>📅 Cumplimiento Fiscal</h1><p>Obligaciones fiscales, tributarias y laborales de las 8 entidades del grupo iWin.</p></div>';
+
+    // ── Empty state: onboarding ───────────────────────────────────────────
+    if(state.fiscal.length===0){
+      html += '<div style="background:var(--surface);border:2px dashed var(--border-strong);border-radius:var(--radius);padding:40px;text-align:center;max-width:560px;margin:0 auto">';
+      html += '<div style="font-size:48px;margin-bottom:12px">📋</div>';
+      html += '<h2 style="margin:0 0 8px">Sin obligaciones registradas</h2>';
+      html += '<p style="color:var(--muted);margin:0 0 24px">Carga el catálogo 2026 con todas las obligaciones de Colombia, México y USA para las 8 entidades del grupo.</p>';
+      html += '<button class="btn btn--primary" style="font-size:14px;padding:12px 24px" onclick="CeoDesk.fiscalSeed()">⚡ Cargar catálogo 2026</button>';
+      html += '<p style="color:var(--faint);font-size:12px;margin-top:12px">~100 obligaciones · Colombia · México · USA</p>';
+      html += '</div>';
+      return { title:'Cumplimiento Fiscal', html:html };
+    }
+
+    // ── Stats ──────────────────────────────────────────────────────────────
+    var totalAll = state.fiscal.length;
+    var overdue = state.fiscal.filter(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today; }).length;
+    var upcoming30 = state.fiscal.filter(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')>=today && new Date(o.due_date+'T12:00:00')<=in30; }).length;
+    var complied = state.fiscal.filter(function(o){ return o.status==='complied'; }).length;
+    var budgetPend = state.fiscal.filter(function(o){ return o.status!=='complied' && o.estimated_amount_usd!=null && o.estimated_amount_usd!==''; }).reduce(function(s,o){ return s+Number(o.estimated_amount_usd||0); },0);
+    var budgetTotal = state.fiscal.filter(function(o){ return o.estimated_amount_usd!=null && o.estimated_amount_usd!==''; }).reduce(function(s,o){ return s+Number(o.estimated_amount_usd||0); },0);
+
+    html += '<div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">';
+    html += '<div class="stat" style="cursor:pointer" onclick="CeoDesk.fiscalSetStatus(\'\');CeoDesk.fiscalSetCountry(\'\')"><div class="stat__label">Total obligaciones</div><div class="stat__value">'+totalAll+'</div></div>';
+    html += '<div class="stat" style="cursor:pointer" onclick="CeoDesk.fiscalSetStatus(\'overdue\');CeoDesk.fiscalSetView(\'list\')"><div class="stat__label">⚠ Vencidas</div><div class="stat__value danger">'+overdue+'</div></div>';
+    html += '<div class="stat" style="cursor:pointer" onclick="CeoDesk.fiscalSetStatus(\'pending\');CeoDesk.fiscalSetView(\'list\')"><div class="stat__label">📆 Próximos 30 días</div><div class="stat__value warn">'+upcoming30+'</div></div>';
+    html += '<div class="stat" style="cursor:pointer" onclick="CeoDesk.fiscalSetStatus(\'complied\');CeoDesk.fiscalSetView(\'list\')"><div class="stat__label">✅ Cumplidas 2026</div><div class="stat__value" style="color:var(--green)">'+complied+'</div></div>';
+    html += '</div>';
+
+    if(budgetPend>0 || budgetTotal>0){
+      html += '<div style="background:var(--amber-soft);border:1px solid color-mix(in srgb,var(--amber) 28%,transparent);border-radius:12px;padding:13px 18px;margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">';
+      html += '<span style="font-size:22px">💰</span>';
+      html += '<div><div style="font-weight:700;font-size:13px;color:var(--amber);text-transform:uppercase;letter-spacing:.03em">Presupuesto estimado — obligaciones pendientes</div>';
+      html += '<div style="font-weight:800;font-size:22px;color:var(--ink)">'+fmtUsd(budgetPend)+' USD</div></div>';
+      if(budgetTotal!==budgetPend) html += '<div style="margin-left:auto;font-size:12px;color:var(--muted)">Total año (incl. cumplidas): <b>'+fmtUsd(budgetTotal)+' USD</b></div>';
+      html += '</div>';
+    }
+
+    // ── Toolbar: país + estado + vista ────────────────────────────────────
+    var country = state.fiscalCountry, status = state.fiscalStatus, view = state.fiscalView||'list';
+
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;align-items:center">';
+    // País
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+    html += '<button class="chip'+(country===''?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'\')">🌎 Todos</button>';
+    html += '<button class="chip'+(country==='CO'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'CO\')">🇨🇴 Colombia</button>';
+    html += '<button class="chip'+(country==='MX'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'MX\')">🇲🇽 México</button>';
+    html += '<button class="chip'+(country==='US'?' on':'')+'" onclick="CeoDesk.fiscalSetCountry(\'US\')">🇺🇸 USA</button>';
+    html += '</div>';
+    // Compañía (entidad) — filtra por empresa del grupo
+    var entity = state.fiscalEntity||'';
+    var entOpts = '<option value="">🏢 Todas las compañías</option>';
+    Object.keys(ENTITY_LABEL).forEach(function(e){ entOpts += '<option value="'+e+'"'+(entity===e?' selected':'')+'>'+esc(ENTITY_LABEL[e])+'</option>'; });
+    html += '<select onchange="CeoDesk.fiscalSetEntity(this.value)" style="width:auto;padding:7px 10px;border:1px solid var(--border-strong);border-radius:9px;font-size:12.5px;font-weight:600;background:var(--surface);color:var(--ink)">'+entOpts+'</select>';
+    // Vista toggle
+    html += '<div style="margin-left:auto;display:flex;border:1px solid var(--border-strong);border-radius:9px;overflow:hidden">';
+    html += '<button onclick="CeoDesk.fiscalSetView(\'calendar\')" style="padding:7px 14px;font-size:12.5px;font-weight:700;border:none;cursor:pointer;background:'+(view==='calendar'?'var(--ink)':'var(--surface)')+';color:'+(view==='calendar'?'var(--surface)':'var(--muted)')+'">📅 Calendario</button>';
+    html += '<button onclick="CeoDesk.fiscalSetView(\'list\')" style="padding:7px 14px;font-size:12.5px;font-weight:700;border:none;border-left:1px solid var(--border-strong);cursor:pointer;background:'+(view==='list'?'var(--ink)':'var(--surface)')+';color:'+(view==='list'?'var(--surface)':'var(--muted)')+'">☰ Lista</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // Estado
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">';
+    html += '<button class="chip'+(status===''?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'\')">Todos</button>';
+    html += '<button class="chip'+(status==='overdue'?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'overdue\')" style="'+(status==='overdue'?'':'color:var(--red)')+'">⚠ Vencidas</button>';
+    html += '<button class="chip'+(status==='pending'?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'pending\')">⏳ Pendientes</button>';
+    html += '<button class="chip'+(status==='complied'?' on':'')+'" onclick="CeoDesk.fiscalSetStatus(\'complied\')" style="'+(status==='complied'?'':'color:var(--green)')+'">✅ Cumplidas</button>';
+    html += '</div>';
+
+    // ── Filtrar items ─────────────────────────────────────────────────────
+    var items = state.fiscal.slice();
+    if(country) items = items.filter(function(o){ return o.country===country; });
+    if(entity) items = items.filter(function(o){ return (o.entity_ids||[]).indexOf(entity)>=0; });
+    if(status==='overdue') items = items.filter(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today; });
+    else if(status==='pending') items = items.filter(function(o){ return o.status!=='complied'; });
+    else if(status==='complied') items = items.filter(function(o){ return o.status==='complied'; });
+
+    if(items.length===0){
+      html += '<div class="empty"><div class="ic">🎉</div><p>No hay obligaciones con este filtro.</p></div>';
+      return { title:'Cumplimiento Fiscal', html:html, after:fiscalAfter };
+    }
+
+    // ── VISTA CALENDARIO ──────────────────────────────────────────────────
+    if(view==='calendar'){
+      // Agrupar items por mes (YYYY-MM)
+      var byMonth = {};
+      items.forEach(function(o){
+        var mk = o.due_date ? o.due_date.slice(0,7) : '0000-00';
+        if(!byMonth[mk]) byMonth[mk]=[];
+        byMonth[mk].push(o);
+      });
+      var monthKeys = Object.keys(byMonth).sort();
+
+      // Mes seleccionado para detalle
+      var selMonth = state.fiscalCalMonth || monthKeys[0];
+      if(!byMonth[selMonth]) selMonth = monthKeys[0];
+
+      // Mini-calendar tabs (un tab por mes con obligaciones)
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">';
+      monthKeys.forEach(function(mk){
+        var p=mk.split('-'), mName=MONTH_SHORT[+p[1]-1]+' '+p[0];
+        var cnt = byMonth[mk].length;
+        var hasOv = byMonth[mk].some(function(o){ return o.status!=='complied' && new Date(o.due_date+'T12:00:00')<today; });
+        var isActive = mk===selMonth;
+        html += '<button onclick="CeoDesk.fiscalSetCalMonth(\''+mk+'\')" style="padding:7px 13px;border-radius:9px;font-size:13px;font-weight:700;border:1.5px solid '+(isActive?'var(--ink)':'var(--border-strong)')+';background:'+(isActive?'var(--ink)':'var(--surface)')+';color:'+(isActive?'var(--surface)':hasOv?'var(--red)':'var(--ink)')+';">'+mName+' <span style="opacity:.7;font-size:11px">('+cnt+')</span></button>';
+      });
+      html += '</div>';
+
+      // Calendario visual del mes seleccionado
+      var cp = selMonth.split('-'), cy = +cp[0], cm = +cp[1]-1;
+      var firstDay = new Date(cy, cm, 1).getDay(); // 0=Dom
+      var daysInMonth = new Date(cy, cm+1, 0).getDate();
+
+      // Mapa día -> obligaciones de ese mes
+      var dayMap = {};
+      (byMonth[selMonth]||[]).forEach(function(o){
+        if(!o.due_date) return;
+        var d = +o.due_date.split('-')[2];
+        if(!dayMap[d]) dayMap[d]=[];
+        dayMap[d].push(o);
+      });
+
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px">';
+      html += '<div style="font-weight:800;font-size:17px;margin-bottom:14px;text-align:center">'+MONTH_NAMES[cm]+' '+cy+'</div>';
+
+      // Grid header
+      var dayNames = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+      html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">';
+      dayNames.forEach(function(d){ html += '<div style="text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding:4px">'+d+'</div>'; });
+      html += '</div>';
+
+      // Day cells
+      html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+      // Empty cells before first day
+      for(var i=0;i<firstDay;i++) html += '<div></div>';
+      for(var d=1;d<=daysInMonth;d++){
+        var dateStr = cp[0]+'-'+(cm+1<10?'0':'')+(cm+1)+'-'+(d<10?'0':'')+d;
+        var dayObs = dayMap[d]||[];
+        var isToday = today.getFullYear()===cy && today.getMonth()===cm && today.getDate()===d;
+        var dotColor = dayObs.length>0 ? fiscalDayColor(dayObs, today) : '';
+        var cellBg = isToday ? 'var(--brand-soft)' : (dayObs.length>0 ? 'var(--surface-2)' : 'transparent');
+        var cellBorder = isToday ? '2px solid var(--brand)' : (dayObs.length>0 ? '1px solid var(--border-strong)' : '1px solid transparent');
+        html += '<div style="border-radius:8px;padding:6px 4px;text-align:center;background:'+cellBg+';border:'+cellBorder+';min-height:52px;cursor:'+(dayObs.length?'pointer':'default')+';" '+(dayObs.length?'onclick="document.getElementById(\'fsec-'+dateStr+'\').scrollIntoView({behavior:\'smooth\',block:\'start\'})"':'')+' title="'+(dayObs.length?dayObs.length+' obligacion'+(dayObs.length>1?'es':''):'')+'">';
+        html += '<div style="font-size:12px;font-weight:'+(isToday?'800':'600')+';color:'+(isToday?'var(--brand)':'var(--ink)')+'">'+d+'</div>';
+        if(dayObs.length>0){
+          html += '<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">';
+          dayObs.slice(0,3).forEach(function(o){
+            var c = o.status==='complied' ? 'var(--green)' : (new Date(o.due_date+'T12:00:00')<today ? 'var(--red)' : (Math.floor((new Date(o.due_date+'T12:00:00')-today)/86400000)<=30 ? 'var(--amber)' : 'var(--brand)'));
+            html += '<div style="height:4px;border-radius:2px;background:'+c+'"></div>';
+          });
+          if(dayObs.length>3) html += '<div style="font-size:9px;color:var(--muted);font-weight:700">+' + (dayObs.length-3)+'</div>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div></div>'; // grid + calendar card
+
+      // Leyenda
+      html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;font-size:12px;color:var(--muted)">';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red);margin-right:4px"></span>Vencida</span>';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--amber);margin-right:4px"></span>Próxima (&lt;30d)</span>';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--brand);margin-right:4px"></span>Pendiente</span>';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);margin-right:4px"></span>Cumplida</span>';
+      html += '</div>';
+
+      // Detalle de cada día con obligaciones (en orden)
+      var sortedDays = Object.keys(dayMap).map(Number).sort(function(a,b){return a-b;});
+      sortedDays.forEach(function(d){
+        var dateStr = cp[0]+'-'+(cm+1<10?'0':'')+(cm+1)+'-'+(d<10?'0':'')+d;
+        html += '<div id="fsec-'+dateStr+'" style="scroll-margin-top:70px">';
+        html += '<div class="rowlbl">'+d+' de '+MONTH_NAMES[cm]+'</div>';
+        html += '<div class="rows" style="margin-bottom:14px">';
+        dayMap[d].forEach(function(o){ html += fiscalObRow(o, today); });
+        html += '</div></div>';
+      });
+
+    // ── VISTA LISTA ───────────────────────────────────────────────────────
+    } else {
+      var groups = {};
+      items.forEach(function(o){
+        var key = o.due_date ? o.due_date.slice(0,7) : '—';
+        if(!groups[key]) groups[key]=[];
+        groups[key].push(o);
+      });
+      var keys = Object.keys(groups).sort();
+
+      keys.forEach(function(k){
+        var parts = k.split('-');
+        var mLabel = k==='—' ? '—' : MONTH_NAMES[+parts[1]-1]+' '+parts[0];
+        html += '<div id="fsec-'+k+'" class="rowlbl" style="scroll-margin-top:70px">'+mLabel+'</div>';
+        html += '<div class="rows" style="margin-bottom:20px">';
+        groups[k].forEach(function(o){ html += fiscalObRow(o, today); });
+        html += '</div>';
+      });
+    }
+
+    return { title:'Cumplimiento Fiscal', html:html, after:fiscalAfter };
+  }
+
+  function fiscalAfter(){
+    var id = state.fiscalEditId;
+    if(id){ var el=document.getElementById('fbudget-'+id); if(el){ el.focus(); el.select(); } }
+  }
+
+  function fiscalSetCountry(c){ state.fiscalCountry=c; render(); }
+  function fiscalSetEntity(e){ state.fiscalEntity=e; render(); }
+  function fiscalSetStatus(s){ state.fiscalStatus=s; render(); }
+  function fiscalSetView(v){ state.fiscalView=v; render(); }
+  function fiscalSetCalMonth(m){ state.fiscalCalMonth=m; render(); }
+  function fiscalEdit(id){ state.fiscalEditId=id; render(); }
+  function fiscalCancelEdit(){ state.fiscalEditId=null; render(); }
+
+  function fiscalComply(id){
+    if(!confirm('¿Marcar como cumplida?')) return;
+    var now = new Date().toISOString().slice(0,10);
+    api('/fiscal',{method:'PUT',body:{id:id, status:'complied', compliance_date:now}})
+      .then(function(){ return loadFiscal(); }).then(function(){ render(); })
+      .catch(function(e){ alert(e.message); });
+  }
+
+  function fiscalUndo(id){
+    if(!confirm('¿Revertir a estado pendiente?')) return;
+    api('/fiscal',{method:'PUT',body:{id:id, status:'pending', compliance_date:null}})
+      .then(function(){ return loadFiscal(); }).then(function(){ render(); })
+      .catch(function(e){ alert(e.message); });
+  }
+
+  function fiscalSaveBudget(id){
+    var el = document.getElementById('fbudget-'+id);
+    var val = el ? el.value.trim() : '';
+    var num = val==='' ? null : Number(val);
+    if(val!=='' && isNaN(num)){ alert('Ingresa un número válido'); return; }
+    api('/fiscal',{method:'PUT',body:{id:id, estimated_amount_usd:num}})
+      .then(function(){ return loadFiscal(); })
+      .then(function(){ state.fiscalEditId=null; render(); })
+      .catch(function(e){ alert(e.message); });
+  }
+
+  function fiscalSeed(){
+    if(!confirm('¿Cargar / recargar el catálogo de obligaciones 2026?\n\n~107 obligaciones para Colombia, México y USA. No duplica lo ya existente.')) return;
+    state.fiscalBusy=true;
+    api('/fiscal?reseed=1')
+      .then(function(d){ state.fiscal=d.obligations||[]; state.fiscalLoaded=true; state.fiscalBusy=false; render(); })
+      .catch(function(e){ state.fiscalBusy=false; alert(e.message||'Error al cargar'); });
+  }
+
+  // expose
+  window.CeoDesk = { logout:logout, setFilter:function(f){state.listFilter=f;render();}, setHist:function(f){state.histFilter=f;render();},
+    boardScope:function(v){state.boardScope=v;render();}, boardArea:function(v){state.boardArea=v;render();}, boardKind:function(v){state.boardKind=v;render();}, boardLabel:function(v){state.boardLabel=v;render();},
+    saveView:function(){ var n=prompt('Nombre de la vista:'); if(!n||!n.trim()) return; var v=loadViews(); v.push({name:n.trim().slice(0,30),kind:state.boardKind,scope:state.boardScope,area:state.boardArea,label:state.boardLabel}); saveViews(v); render(); },
+    applyView:function(i){ var v=loadViews()[i]; if(!v) return; state.boardKind=v.kind||'task'; state.boardScope=v.scope||''; state.boardArea=v.area||''; state.boardLabel=v.label||''; render(); },
+    delView:function(i){ var v=loadViews(); v.splice(i,1); saveViews(v); render(); },
+    dragStart:dragStart, dragOver:dragOver, dragLeave:dragLeave, drop:drop,
+    act:act, respond:respond, comment:comment, toggleMenu:toggleMenu, closeMenu:closeMenu,
+    gtCreate:gtCreate, gtAct:gtAct, gtConnect:gtConnect, gtDisconnect:gtDisconnect,
+    jiraConnect:jiraConnect, jiraDisconnect:jiraDisconnect,
+    fiscalSetCountry:fiscalSetCountry, fiscalSetEntity:fiscalSetEntity, fiscalSetStatus:fiscalSetStatus, fiscalSetView:fiscalSetView, fiscalSetCalMonth:fiscalSetCalMonth, fiscalEdit:fiscalEdit, fiscalCancelEdit:fiscalCancelEdit, fiscalComply:fiscalComply, fiscalUndo:fiscalUndo, fiscalSaveBudget:fiscalSaveBudget, fiscalSeed:fiscalSeed };
+
+  window.addEventListener('hashchange', function(){ if(state.user) render(); });
+  boot();
+})();
+</script>
+</body>
+</html>
